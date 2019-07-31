@@ -1,0 +1,53 @@
+-- Model 0 Si/Cu/Fe_free
+.probe
+  .Aguide = Aguide 04_dn = 270
+  .H = H 04_dn = 0
+  .mm
+    .back_absorption = back_absorption 04_dn = 1
+    .background = background 04_dn = 0
+    .dQ_scaling = dQ_scaling 04_dn = 1
+    .intensity = intensity 04_dn = 1
+    .sample_broadening = sample_broadening 04_dn = 0
+    .theta_offset = theta_offset 04_dn = 0
+  .mp = None
+  .pm = None
+  .pp = None
+.sample
+  .layers
+    [0]
+      .interface = air interface = 2
+      .material = None
+      .thickness = air thickness = 0
+    [1]
+      .interface = multilayer top interface = 1
+      .repeat = multilayer repeats = 2
+      .stack
+        .layers
+          [0]
+            .interface = SLD interface = 3
+            .material
+              .irho = SLD irho = 0
+              .rho = SLD rho = 7
+            .thickness = SLD thickness = 20
+          [1]
+            .interface = SLD interface = 1
+            .material
+              .irho = SLD irho = 0
+              .rho = SLD rho = 6 in [5.93,6.06]
+            .thickness = SLD thickness = 10
+        .thickness = stack thickness = 30
+      .thickness = repeat thickness = 60
+    [2]
+      .interface = SLD interface = 3
+      .material
+        .irho = SLD irho = 0
+        .rho = SLD rho = 4.662
+      .thickness = SLD thickness = 50
+    [3]
+      .interface = air interface = 2
+      .material = None
+      .thickness = air thickness = 0
+  .thickness = stack thickness = 110
+
+[chisq=1.009750(100), nllf=5048.75]
+[overall chisq=1.00985(10), nllf=5048.75]

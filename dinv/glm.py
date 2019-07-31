@@ -21,7 +21,7 @@ class FourierTransform(object):
         Or more readable:
                                     -- oo
                           1        /
-           F(f)(w) :=  -------    /   f(k) exp(2ikw) dk
+           F(f)(w) :=  -------    /   f(k) exp(-ikw) dk
                         2 pi     /
                                --  -oo
 
@@ -79,23 +79,22 @@ class FourierTransform(object):
             cache = {}
 
         self._cache = cache
-        self._cache_int = {}
-        self._precision = 2
 
     def __call__(self, *args, **kwargs):
         w = args[0] + self._offset
 
-        if args[0] <= 0:
-            return 0.0
+        # if args[0] <= 0:
+        #    return 0.0
 
         if not w in self._cache:
             # print("calculating at {}".format(w))
             self._cache[w] = self.method(w)
+
         return self._cache[w]
 
     def fourier_transform(self, w):
         # Note here, since k_space is positive (see 2)), the factor reduces to 2/2pi.
-        return 1 / pi * scipy.integrate.trapz((self._r + 1j * self._i) * numpy.exp(1j * self._k * w),
+        return 1 / pi * scipy.integrate.trapz((self._r + 1j * self._i) * numpy.exp(-1j * self._k * w),
                                               dx=self._k_spacing).real
 
     def cosine_transform(self, w):
@@ -103,7 +102,7 @@ class FourierTransform(object):
         return 2 / pi * scipy.integrate.trapz(numpy.cos(self._k * w) * self._r, dx=self._k_spacing)
 
     def sine_transform(self, w):
-        return -2 / pi * scipy.integrate.trapz(numpy.sin(self._k * w) * self._i, dx=self._k_spacing)
+        return 2 / pi * scipy.integrate.trapz(numpy.sin(self._k * w) * self._i, dx=self._k_spacing)
 
     def plot(self, w_range, show=True, offset=0):
         pylab.plot(w_range, [self.method(w) + offset for w in w_range])
@@ -210,6 +209,7 @@ class GLMSolver(object):
         A = numpy.zeros((N + 1, N + 1))
 
         cache = [eps * g(eps * i) for i in range(0, N + 1)]
+
         G = 1 / eps * array(cache)
 
         """
@@ -246,7 +246,7 @@ class GLMSolver(object):
 
         A = A + numpy.identity(N + 1)
 
-        P, L, U = scipy.linalg.lu(A)
+        _, L, U = scipy.linalg.lu(A)
 
         self._cached_G = G
         self._last_N = N
@@ -257,11 +257,11 @@ class GLMSolver(object):
     def solve_all(self):
         """
 
-        This method solves for the kernel K(x, x) now. It uses the generates matrix from solve_init and reconstructs
+        This method solves for the kernel K(x, x) now. It uses the generated matrix from solve_init and reconstructs
         several smaller matrices, which will be used to compute K(x, x).
         In principle the smaller matrices are sub-matrices of the original one, by 'cutting off' the outer border of
         the matrix, i.e. removing top, bottom, left and right vectors of the matrix. Just one small adjustment has to
-        be made, i.e. multiplaction by 0.5 of the last column vector. This is necessary for a correct implementation
+        be made, i.e. multiplication by 0.5 of the last column vector. This is necessary for a correct implementation
         of the trapezoidal integration rule.
 
         Since only the K(x, x) is needed, we can save a whole backwards-substitution using U. In fact, it is possible
@@ -295,6 +295,43 @@ class GLMSolver(object):
         # computation time.
         return array(list(reversed(pot)))
 
+    def solve_new(self, x, precision, max_thickness):
+
+        N = 2 * max_thickness * precision
+        eps = 1.0 / precision
+
+        g = self._fourier
+
+        cache = array([g(2 * (x + i * eps)) for i in range(0, N + 1)])
+        G = array(list(cache))
+        cache *= eps
+
+        A = numpy.zeros((N + 1, N + 1))
+
+        for i in range(0, N + 1):
+            A[i][0:N - i] = cache[i:N]
+
+        A = numpy.identity(N + 1) + A
+
+        return numpy.linalg.solve(A, -G)
+
+    def solve_init_new(self, max_thickness, eps):
+        self._L = max_thickness
+        self._prec = int(1.0 / eps)
+
+    def solve_all_new(self, x_range=None):
+
+        if x_range is None:
+            x_range = numpy.linspace(0, self._L, self._prec * self._L + 1)
+
+        pot = []
+
+        for x in x_range:
+            sol = self.solve_new(x, precision=self._prec, max_thickness=self._L)
+            pot.append(sol[0])
+
+        return pot
+
 
 class PotentialReconstruction(object):
     def __init__(self, potential_end, precision, cutoff=1):
@@ -302,7 +339,7 @@ class PotentialReconstruction(object):
         self._prec = precision
         self._cut = cutoff
 
-        self._xspace, self._dx = numpy.linspace(0, self._end, self._prec * (self._end + 1), retstep=True)
+        self._xspace, self._dx = numpy.linspace(0, self._end, self._prec * self._end + 1, retstep=True)
 
     def reconstruct(self, fourier_transform):
         eps = 1.0 / self._prec
@@ -310,6 +347,7 @@ class PotentialReconstruction(object):
         solver = GLMSolver(fourier_transform)
 
         solver.solve_init(self._end, eps)
+        # solver.solve_init_new(self._end, eps)
 
         # in principle we're solving the diff.eq.
         #   u'' = (4*pi*rho(z) - k^2) u = (V(z) - k^2) u
@@ -318,12 +356,18 @@ class PotentialReconstruction(object):
         # The factor 2 comes from the fact that V = 2 d/dx K(x,x)
         # The factor self._prec scales the d/dx correctly, since self._prec increases the number of point evaluated
         # pot = self._prec / (4 * math.pi) * 2 * numpy.diff(solver.solve_all())
-        pot = 2 / (4 * math.pi) * numpy.gradient(solver.solve_all(), self._dx, edge_order=2)
 
-        pot[0:self._cut] = 0
+        solution = solver.solve_all()
+        # solution = solver.solve_all_new()
 
-        potential = scipy.interpolate.interp1d(self._xspace[:-1 - self._prec], pot[:-2],
-                                               fill_value=(0, 0), bounds_error=False)
+        pot = 2 / (4 * math.pi) * numpy.gradient(solution, self._dx, edge_order=2)
+
+
+        if self._cut > 0:
+            pot[0:self._cut] = 0
+            pot[-self._cut:] = 0
+
+        potential = scipy.interpolate.interp1d(self._xspace, pot, fill_value=(0, 0), bounds_error=False)
 
         return potential
 
@@ -335,7 +379,23 @@ class ReflectionCalculation(object):
         self._z1 = z_max
         self._dz = dz
 
+    def plot_potential(self):
+        z_space = numpy.linspace(self._z0, self._z1, (self._z1 - self._z0) / self._dz + 1)
+        pylab.plot(z_space, self._pot(z_space))
+
     def refl(self, Q):
+
+        from refl1d.reflectivity import reflectivity_amplitude
+
+        z_space = numpy.linspace(self._z0, self._z1, (self._z1 - self._z0) / self._dz + 1)
+        dz = numpy.hstack((0, numpy.diff(z_space), 0))
+
+        # refl wants to have SLD*1e6
+        rho = numpy.hstack((0, array([self._pot(z) * 1e6 for z in z_space])))
+
+        return reflectivity_amplitude(kz=Q / 2, depth=dz, rho=rho)
+
+        """
         z_space = numpy.linspace(self._z0, self._z1, (self._z1 - self._z0) / self._dz + 1)
         dz = numpy.hstack((0, numpy.diff(z_space), 0))
 
@@ -343,12 +403,14 @@ class ReflectionCalculation(object):
         rho = numpy.hstack((0, array([self._pot(z) * 1e6 for z in z_space]), 0))
 
         return refl(Q, dz, rho)
+        """
 
     def plot_ampl(self, q_space, scale=True):
         if scale:
             refl = [self.refl(q) * q ** 2 for q in q_space]
         else:
             refl = [self.refl(q) for q in q_space]
+
         Rreal = array([r.real for r in refl])
 
         # TODO: imag has a sign error

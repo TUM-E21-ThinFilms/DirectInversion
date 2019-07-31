@@ -37,7 +37,7 @@ Optical matrix form of the reflectivity calculation.
 
 O.S. Heavens, Optical Properties of Thin Solid Films
 """
-def refl(Qz, depth, rho, mu=0, wavelength=1, sigma=0):
+def refl(Qz, depth, rho, mu=0, wavelength=4, sigma=0):
     """
     Reflectometry as a function of Qz and wavelength.
 

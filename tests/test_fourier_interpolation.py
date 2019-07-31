@@ -27,7 +27,7 @@ F = lambda w: numpy.heaviside(w, 1) * (
 
 
 
-exact_phase = numpy.loadtxt("../../AMOR_Fe/sim/amplitude.real").T
+exact_phase = numpy.loadtxt("data/amplitude.real").T
 k = (exact_phase[0] / 2)
 real = exact_phase[1]
 imag = -exact_phase[2]
