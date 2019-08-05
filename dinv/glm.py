@@ -2,10 +2,30 @@ import scipy.integrate
 import numpy
 import math
 import pylab
-
+import time
 from numpy import array, pi
 from dinv.refl import refl
 
+global _bm_before, _bm_after, _debug
+
+_bm_before = 0
+_bm_after = 0
+try:
+    if _debug is None:
+        _debug = False
+except:
+    _debug = False
+
+def benchmark_start():
+    global _bm_after, _bm_before
+    _bm_before = time.time()
+
+def benchmark_stop(text):
+    global _bm_after, _bm_before
+    _bm_after = time.time()
+    diff = _bm_after - _bm_before
+    if _debug:
+        print(text.format(str(diff) + " s"))
 
 class FourierTransform(object):
     def __init__(self, k_range, real_part, imaginary_part=None, offset=0, cache=None):
@@ -83,14 +103,27 @@ class FourierTransform(object):
     def __call__(self, *args, **kwargs):
         w = args[0] + self._offset
 
-        # if args[0] <= 0:
-        #    return 0.0
+        if args[0] <= 0:
+            return 0.0
 
         if not w in self._cache:
             # print("calculating at {}".format(w))
             self._cache[w] = self.method(w)
 
         return self._cache[w]
+
+    def update(self, k_range, values):
+        r = values.real
+        i = values.imag
+
+        old_r = list(self._r[0:len(values)])
+
+        self._r[0:len(values)] = r
+        self._i[0:len(values)] = i
+
+        self._cache = {}
+
+        return numpy.max(abs(old_r - r))
 
     def fourier_transform(self, w):
         # Note here, since k_space is positive (see 2)), the factor reduces to 2/2pi.
@@ -208,7 +241,9 @@ class GLMSolver(object):
 
         A = numpy.zeros((N + 1, N + 1))
 
+        benchmark_start()
         cache = [eps * g(eps * i) for i in range(0, N + 1)]
+        benchmark_stop("Calculating Fourier Transform: {}")
 
         G = 1 / eps * array(cache)
 
@@ -231,8 +266,10 @@ class GLMSolver(object):
             K(x, x) 
         
         """
+        benchmark_start()
         for i in range(1, N + 1):
             A[i][N - i:N] = cache[0:i]
+        benchmark_stop("Setting up matrix: {}")
 
         """
             Multiply the last column vector by 0.5
@@ -246,12 +283,18 @@ class GLMSolver(object):
 
         A = A + numpy.identity(N + 1)
 
-        _, L, U = scipy.linalg.lu(A)
-
         self._cached_G = G
         self._last_N = N
 
+        #self._invA = numpy.linalg.inv(A)
+        benchmark_start()
+        _, L, U = scipy.linalg.lu(A)
+        benchmark_stop("Calculating  LU decomposition: {}")
+
+        benchmark_start()
         self._Lprev = numpy.linalg.inv(L)
+        benchmark_stop("Inverting L: {}")
+
         self._Uprev = U
 
     def solve_all(self):
@@ -273,10 +316,16 @@ class GLMSolver(object):
         Linv = self._Lprev
         U = self._Uprev
         G = self._cached_G
+        #invA = self._invA
+
 
         pot = []
-
+        benchmark_start()
         for k in range(0, self._last_N + 1, 2):
+
+            #x = -numpy.dot(invA[-1,], G)
+            #pot.append(x)
+
             y = -numpy.dot(Linv[-1,], G)
 
             # For the first entry we dont have to scale the column by something since this was done by the init method
@@ -284,12 +333,15 @@ class GLMSolver(object):
             if k == 0:
                 pot.append(y / (U[-1][-1]))
             else:
-                pot.append(2 * y / (U[-1][-1] + 1))
+                pot.append(2 * y / (U[-1][-1]+1))
 
             Linv = Linv[1:-1, 1:-1]
             U = U[1:-1, 1:-1]
+
+            #invA = invA[1:-1, 1:-1]
             G = G[0:-2]
 
+        benchmark_stop("Calculating Kernel: {}")
         # Since we reconstruct from the "outmost" to the inner matrix, we reverse the list.
         # usually, you start with the smallest matrix and construct from that a bigger matrix. But that wouldnt save
         # computation time.
@@ -334,12 +386,13 @@ class GLMSolver(object):
 
 
 class PotentialReconstruction(object):
-    def __init__(self, potential_end, precision, cutoff=1):
+    def __init__(self, potential_end, precision, shift=0, cutoff=1):
         self._end = potential_end
         self._prec = precision
         self._cut = cutoff
 
         self._xspace, self._dx = numpy.linspace(0, self._end, self._prec * self._end + 1, retstep=True)
+        self._xspace += shift
 
     def reconstruct(self, fourier_transform):
         eps = 1.0 / self._prec
@@ -393,7 +446,11 @@ class ReflectionCalculation(object):
         # refl wants to have SLD*1e6
         rho = numpy.hstack((0, array([self._pot(z) * 1e6 for z in z_space])))
 
-        return reflectivity_amplitude(kz=Q / 2, depth=dz, rho=rho)
+        R = reflectivity_amplitude(kz=Q / 2, depth=dz, rho=rho)
+        # TODO: fix the wrong sign
+        R.imag = -R.imag
+
+        return R
 
         """
         z_space = numpy.linspace(self._z0, self._z1, (self._z1 - self._z0) / self._dz + 1)
@@ -433,3 +490,47 @@ class ReflectionCalculation(object):
         pylab.xlabel("q_space")
         pylab.ylabel("log R")
         pylab.yscale('log')
+
+
+
+class ReflectivityAmplitudeInterpolation(object):
+    def __init__(self, transform, k_interpolation_range, potential_reconstruction, constraint):
+        self._transform = transform
+        self._rec = potential_reconstruction
+        self._constraint = constraint
+        self._range = k_interpolation_range
+        self._hook = None
+
+        self.iteration = 0
+        self.potential = None
+        self.reflectivity = []
+        self.is_last_iteration = False
+        self.reflcalc = None
+
+    def set_hook(self, hook):
+        self._hook = hook
+
+    def interpolate(self, max_iterations, tolerance=1e-8):
+
+        for self.iteration in range(1, max_iterations + 1):
+
+            benchmark_start()
+            self.potential = self._rec.reconstruct(self._transform)
+            self.potential = self._constraint(self.potential, self._rec._xspace)
+            benchmark_stop("Reconstructed Potential: {}")
+
+            benchmark_start()
+            # Use the new reflection coefficient for small k-values and re-do the inversion ...
+            self.reflcalc = ReflectionCalculation(self.potential, 0, self._rec._end, 0.1)
+            self.reflectivity = self.reflcalc.refl(2 * self._range)
+            diff = self._transform.update(self._range, self.reflectivity)
+            benchmark_stop("Updated amplitudes: {}")
+
+            if diff < tolerance or self.iteration == max_iterations:
+                self.is_last_iteration = True
+
+            if self._hook is not None:
+                self._hook(self)
+
+            if diff < tolerance:
+                break

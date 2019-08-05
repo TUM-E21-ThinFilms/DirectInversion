@@ -16,7 +16,7 @@ import numpy as np
 
 data = {
     filename[-9:-4]: load4(filename, name=filename[-9:-4], columns="Q R dQ dR",
-                           radiation="neutron", L=0.1, dL=0.00001 / 4, simulation_range=np.linspace(0, 10, 10000))
+                           radiation="neutron", L=0.1, dL=0.00001 / 4, simulation_range=np.linspace(0, 0.25, 2500))
     # filename[-9:-4]: load4(filename, name=filename[-9:-4], columns="Q R dQ dR", radiation="neutron", L=4, dL=0.0004 / 4, data_range=(6, None),  back_reflectivity=True, simulation_range=np.linspace(0.0001, 0.5, 2000))
     for filename in glob("data/fecu_d*.Rqz")
 }
@@ -65,10 +65,10 @@ t3 = Slab(test_material3, 15, 0)
 """
 
 
-sur1 = Slab(air, 0, 2)
-t1 = Slab(test_material, 20, 3)
-t2 = Slab(test_material2, 10, 1)
-t3 = Slab(test_material3, 50, 3)
+sur1 = Slab(air, 0, 5)
+t1 = Slab(test_material, 30, 6)
+t2 = Slab(test_material2, 30, 3)
+t3 = Slab(test_material3, 30, 2)
 
 samples = {
     # '01': Stack([si_slab, cu_slab, au_slab, qsur1]),
@@ -79,6 +79,7 @@ samples = {
     #'free': Stack([sur1, test_slab, test_slab2, sur1]),
     'free2': Stack([si_slab, cu_slab, iron_fcc_slab[0], air]),
     'free': Stack([sur1, 2*Stack([t1, t2]), t3, sur1]),
+    #'free': Stack([sur1, t3, sur1]),
     '01': Stack([si_slab, cu_slab, iron_fcc_slab[1], air_slab]),
     '02': Stack([si_slab, cu_slab, iron_fcc_slab[2], air_slab]),
     '03': Stack([si_slab, cu_slab, iron_fcc_slab[3], air_slab]),
@@ -86,7 +87,9 @@ samples = {
 }
 
 # iron_fcc_slab[0].thickness.range(0, 20)
+t1.material.rho.pmp(1)
 t2.material.rho.pmp(1)
+t3.material.rho.pmp(1)
 au_slab.material.density.pmp(20)
 cu_slab.material.density.pmp(20)
 

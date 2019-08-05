@@ -11,14 +11,22 @@ real = exact_phase[1]
 imag = exact_phase[2]
 
 
-# Now sample the reflection coefficients
-transform = FourierTransform(q / 2, real, imag, offset=0)
 
+
+
+thickness = 130
+#cutoff = 0.01
+#start_end = (1, numpy.argmax(q / 2 > cutoff))
+#real[start_end[1]:-1] = 0
 
 # frequency space
 #w_space = numpy.linspace(70*2, 80*2, 10000)
-w_space = numpy.linspace(-50, 500, 10000)
+w_space = numpy.linspace(-50, 5000, 5000)
 
+
+
+# Now sample the reflection coefficients
+transform = FourierTransform(q / 2, real, imag, offset=0)
 
 # Comparison to the numerical approximations
 pylab.plot(w_space, [transform(w) for w in w_space], '-.')
@@ -26,7 +34,7 @@ pylab.plot(w_space, [transform.cosine_transform(w) for w in w_space])
 pylab.plot(w_space, [transform.sine_transform(w) for w in w_space], '--')
 
 pylab.axvline(color='black')
-pylab.axvline(2*75, color='black')
+pylab.axvline(2*thickness, color='black')
 pylab.axhline(color='black')
 
 pylab.legend(['fourier', 'cosine', 'sine'])
