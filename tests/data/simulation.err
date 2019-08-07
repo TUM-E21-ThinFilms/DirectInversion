@@ -15,39 +15,39 @@
 .sample
   .layers
     [0]
-      .interface = air interface = 5
+      .interface = air interface = 4
       .material = None
       .thickness = air thickness = 0
     [1]
-      .interface = multilayer top interface = 3
-      .repeat = multilayer repeats = 2
+      .interface = multilayer top interface = 9
+      .repeat = multilayer repeats = 25
       .stack
         .layers
           [0]
-            .interface = SLD interface = 6
+            .interface = SLD interface = 5
             .material
               .irho = SLD irho = 0
               .rho = SLD rho = 7 in [6.93,7.07]
-            .thickness = SLD thickness = 30
+            .thickness = SLD thickness = 20
           [1]
-            .interface = SLD interface = 3
+            .interface = SLD interface = 9
             .material
               .irho = SLD irho = 0
-              .rho = SLD rho = 6 in [5.93,6.06]
-            .thickness = SLD thickness = 30
-        .thickness = stack thickness = 60
-      .thickness = repeat thickness = 120
+              .rho = SLD rho = 3 in [2.969,3.03]
+            .thickness = SLD thickness = 13
+        .thickness = stack thickness = 33
+      .thickness = repeat thickness = 825
     [2]
-      .interface = SLD interface = 2
+      .interface = SLD interface = 4
       .material
         .irho = SLD irho = 0
         .rho = SLD rho = 4.662 in [4.615,4.709]
-      .thickness = SLD thickness = 30
+      .thickness = SLD thickness = 11
     [3]
-      .interface = air interface = 5
+      .interface = air interface = 4
       .material = None
       .thickness = air thickness = 0
-  .thickness = stack thickness = 150
+  .thickness = stack thickness = 836
 
-[chisq=1.0425(14), nllf=1303.17]
-[overall chisq=1.0438(14), nllf=1303.17]
+[chisq=0.9775(14), nllf=1221.85]
+[overall chisq=0.9787(14), nllf=1221.85]

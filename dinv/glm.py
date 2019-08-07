@@ -11,7 +11,7 @@ global _bm_before, _bm_after, _debug
 _bm_before = 0
 _bm_after = 0
 try:
-    if _debug is None:
+    if _debug is False:
         _debug = False
 except:
     _debug = False
@@ -117,9 +117,12 @@ class FourierTransform(object):
         i = values.imag
 
         old_r = list(self._r[0:len(values)])
-
-        self._r[0:len(values)] = r
-        self._i[0:len(values)] = i
+        if len(values) == len(self._r):
+            self._r = r
+            self._i = i
+        else:
+            self._r[0:len(values)] = r
+            self._i[0:len(values)] = i
 
         self._cache = {}
 
@@ -150,6 +153,20 @@ class FourierTransform(object):
         if show:
             pylab.show()
 
+
+class UpdateableFourierTransform(FourierTransform):
+    def __init__(self, f1, f2):
+        self._f1 = f1
+        self._f2 = f2
+
+    def update(self, k_range, values):
+        # just update f1, which contains R(k) for small k
+        return self._f1.update(k_range, values)
+
+    def __call__(self, *args, **kwargs):
+        w = args[0]
+
+        return self._f1(w) + self._f2(w)
 
 # can be removed
 def reconstruct_imaginary_reflection(real_reflection, first_imaginary):

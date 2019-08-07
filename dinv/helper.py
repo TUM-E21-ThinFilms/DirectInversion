@@ -5,7 +5,7 @@ import pylab
 from numpy import array
 
 from dinv.glm import ReflectivityAmplitudeInterpolation, ReflectionCalculation, PotentialReconstruction, \
-    FourierTransform
+    FourierTransform, UpdateableFourierTransform
 
 
 def load_potential(file):
@@ -31,7 +31,8 @@ def shake(var, start_end, noise=0.0):
 
 class TestRun(object):
     def __init__(self, file):
-        # Sets R(q) = uniform(-1, 1) for q < cutoff
+        # Sets R(k) = uniform(-1, 1) for k < cutoff
+        # 0.1 is approximately the critical edge for Si
         self.cutoff = 0.1
         # adds gaussian noise to R(q)
         self.noise = 5e-2
@@ -51,6 +52,7 @@ class TestRun(object):
         self.pot_cutoff = 2
 
         self.q_max = 0.5
+        self.q_precision = 1
 
         self.plot_potential = True
         self.plot_phase = False
@@ -59,14 +61,15 @@ class TestRun(object):
         self.plot_every_nth = 10
 
 
+
         self.legends = []
 
         self.file = file
 
     def setup(self):
 
-        self.plot_potential_space = numpy.linspace(0, self.thickness + self.offset, 10 * (self.thickness + self.offset) + 1)
-        self.k_space = numpy.linspace(0, self.q_max / 2, self.q_max * 1000 + 1)
+        self.plot_potential_space = numpy.linspace(0, self.thickness + self.offset, 10 * (self.thickness + self.offset)+1)
+        self.k_space = numpy.linspace(0, self.q_max / 2, self.q_precision * self.q_max * 1000 + 1)
 
         self.start_end = (0, numpy.argmax(self.k_space > self.cutoff))
         self.k_interpolation_range = self.k_space[self.start_end[0]:self.start_end[1]]
@@ -86,7 +89,7 @@ class TestRun(object):
         if self.plot_potential:
             transform = FourierTransform(self.k_space, self.reflectivity.real, self.reflectivity.imag)
             # cosine transform doesnt use imaginary part of the reflectivity amplitude
-            transform.method = transform.cosine_transform
+            #transform.method = transform.cosine_transform
 
             rec = PotentialReconstruction(self.thickness + self.offset, self.precision, cutoff=self.pot_cutoff)
 
@@ -134,7 +137,7 @@ class TestRun(object):
 
         exact_real = (self.reflectivity[self.start_end[0]:self.start_end[1]]).real
         # relative error
-        print((interpolated_reflectivity - exact_real) / exact_real * 100)
+        print(iteration, (interpolated_reflectivity - exact_real) / exact_real * 100)
 
     def run(self, constrain):
 
@@ -143,8 +146,15 @@ class TestRun(object):
 
         rec = PotentialReconstruction(self.thickness + self.offset, self.precision, cutoff=self.pot_cutoff)
 
-        transform = FourierTransform(self.k_space, self.real, self.imag)
-        #transform.method = transform.cosine_transform
+
+        # split the fourier transform up into two parts
+        # f1 has the changing input
+        # f2 has the non-changing input
+        # since f2 contains much more data in general, we can save alot of computation by caching f2 and just
+        # computing f1 each time.
+        f1 = FourierTransform(self.k_space[:self.start_end[1]+1], self.real[:self.start_end[1]+1], self.imag[:self.start_end[1]+1])
+        f2 = FourierTransform(self.k_space[self.start_end[1]:], self.real[self.start_end[1]:], self.imag[self.start_end[1]:])
+        transform = UpdateableFourierTransform(f1, f2)
 
         interpolation = ReflectivityAmplitudeInterpolation(transform, self.k_interpolation_range, rec, constrain)
         interpolation.set_hook(self._plot_hook)

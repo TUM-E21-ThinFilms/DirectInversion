@@ -53,7 +53,7 @@ au_slab = Slab(gold, 15, 0)
 iron_slab = Slab(iron_fcc, 20, 0)
 
 test_material = SLD(rho=7)
-test_material2 = SLD(rho=6)
+test_material2 = SLD(rho=3)
 test_material3 = SLD(rho=4.662)
 
 
@@ -65,10 +65,10 @@ t3 = Slab(test_material3, 15, 0)
 """
 
 
-sur1 = Slab(air, 0, 5)
-t1 = Slab(test_material, 30, 6)
-t2 = Slab(test_material2, 30, 3)
-t3 = Slab(test_material3, 30, 2)
+sur1 = Slab(air, 0, 4)
+t1 = Slab(test_material, 20, 5)
+t2 = Slab(test_material2, 13, 9)
+t3 = Slab(test_material3, 11, 4)
 
 samples = {
     # '01': Stack([si_slab, cu_slab, au_slab, qsur1]),
@@ -78,7 +78,7 @@ samples = {
     # 'free_rev': Stack([sur1, au_slab, cu_merge_slab, sur1]),
     #'free': Stack([sur1, test_slab, test_slab2, sur1]),
     'free2': Stack([si_slab, cu_slab, iron_fcc_slab[0], air]),
-    'free': Stack([sur1, 2*Stack([t1, t2]), t3, sur1]),
+    'free': Stack([sur1, 25*Stack([t1, t2]), t3, sur1]),
     #'free': Stack([sur1, t3, sur1]),
     '01': Stack([si_slab, cu_slab, iron_fcc_slab[1], air_slab]),
     '02': Stack([si_slab, cu_slab, iron_fcc_slab[2], air_slab]),
@@ -115,7 +115,7 @@ for name, probe in probes.items():
 
 models = {
     name: Experiment(probe=probes[name], sample=samples[name], name='Si/Cu/Fe_' + name)
-    for name in ['01', '02', '03', '04', 'free']
+    for name in ['01', '02', '03', '04', 'free', 'free2']
 }
 
 fit_iron_layer = 4

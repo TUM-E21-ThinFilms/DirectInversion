@@ -2,6 +2,11 @@ import numpy
 import scipy.interpolate
 
 from dinv.helper import TestRun
+import dinv
+from dinv.glm import _debug
+
+
+dinv.glm._debug = False
 
 numpy.random.seed(1)
 
@@ -11,7 +16,8 @@ numpy.set_printoptions(precision=2, linewidth=220)
 def constrain(potential, x_space):
     data = potential(x_space)
 
-    data[(x_space >= 200)] = 0e-6
+    data[(x_space >= 1550)] = 0e-6
+    data[(x_space <= 690)] = 0e-6
 
     interpolation = scipy.interpolate.interp1d(x_space, data, fill_value=(0, 0), bounds_error=False)
     return interpolation
@@ -19,16 +25,17 @@ def constrain(potential, x_space):
 
 test = TestRun("profile.dat")
 
-test.cutoff = 0.01
+test.cutoff = 0.009
 test.noise = 0
-test.iterations = 100
-test.tolerance = 1e-8
-test.offset = 20
-test.thickness = 180
-test.precision = 2
+test.iterations = 1000
+test.tolerance = 1e-10
+test.offset = 700
+test.thickness = 900
+test.precision = 0.25
 test.pot_cutoff = 2
-test.plot_every_nth = 30
-test.q_max = 0.25
+test.plot_every_nth = 50
+test.q_max = 5
+test.q_precision = 5
 
 test.plot_potential = True
 test.plot_phase = False
