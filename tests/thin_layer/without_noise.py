@@ -28,7 +28,7 @@ test.thickness = 180
 test.precision = 2
 test.pot_cutoff = 2
 test.plot_every_nth = 30
-test.q_max = 0.25
+test.q_max = 1
 
 test.plot_potential = True
 test.plot_phase = False

@@ -4,7 +4,6 @@ import scipy.interpolate
 from dinv.helper import TestRun
 
 numpy.random.seed(1)
-
 numpy.set_printoptions(precision=2, linewidth=220)
 
 

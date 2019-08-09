@@ -3,9 +3,8 @@ import scipy.interpolate
 import pylab
 
 from numpy import array
-
-from dinv.glm import ReflectivityAmplitudeInterpolation, ReflectionCalculation, PotentialReconstruction, \
-    FourierTransform, UpdateableFourierTransform
+from dinv.glm import ReflectivityAmplitudeInterpolation, ReflectionCalculation, PotentialReconstruction
+from dinv.fourier import UpdateableFourierTransform, FourierTransform
 
 
 def load_potential(file):
@@ -66,8 +65,9 @@ class TestRun(object):
 
     def setup(self):
 
-        self.plot_potential_space = numpy.linspace(0, self.thickness + self.offset, 10 * (self.thickness + self.offset)+1)
-        self.k_space = numpy.linspace(0, self.q_max / 2.0, self.q_precision * self.q_max * 1000 + 1)
+        self.plot_potential_space = numpy.linspace(0, self.thickness + self.offset,
+                                                   10 * (self.thickness + self.offset) + 1)
+        self.k_space = numpy.linspace(0, self.q_max / 2.0, int(self.q_precision * self.q_max * 1000) + 1)
 
         self.start_end = (0, numpy.argmax(self.k_space > self.cutoff))
         self.k_interpolation_range = self.k_space[self.start_end[0]:self.start_end[1]]
@@ -86,7 +86,7 @@ class TestRun(object):
         if self.plot_potential:
             transform = FourierTransform(self.k_space, self.reflectivity.real, self.reflectivity.imag)
             # cosine transform doesnt use imaginary part of the reflectivity amplitude
-            #transform.method = transform.cosine_transform
+            # transform.method = transform.cosine_transform
 
             rec = PotentialReconstruction(self.thickness + self.offset, self.precision, cutoff=self.pot_cutoff)
 
@@ -123,7 +123,8 @@ class TestRun(object):
                 pylab.plot(self.plot_potential_space, potential(self.plot_potential_space))
 
             if self.plot_phase:
-                pylab.plot(self.k_space[0:self.start_end[1]], interpolated_reflectivity * self.k_space[0:self.start_end[1]] ** 2, '.')
+                pylab.plot(self.k_space[0:self.start_end[1]],
+                           interpolated_reflectivity * self.k_space[0:self.start_end[1]] ** 2, '.')
 
             if self.plot_reflectivity:
                 R = interpolator.reflcalc.refl(2 * self.k_space)
@@ -146,13 +147,16 @@ class TestRun(object):
         # f2 has the non-changing input
         # since f2 contains much more data in general, we can save alot of computation by caching f2 and just
         # computing f1 each time.
-        f1 = FourierTransform(self.k_space[:self.start_end[1]+1], self.real[:self.start_end[1]+1], self.imag[:self.start_end[1]+1])
-        f2 = FourierTransform(self.k_space[self.start_end[1]:], self.real[self.start_end[1]:], self.imag[self.start_end[1]:])
+        f1 = FourierTransform(self.k_space[:self.start_end[1] + 1], self.real[:self.start_end[1] + 1],
+                              self.imag[:self.start_end[1] + 1])
+        f2 = FourierTransform(self.k_space[self.start_end[1]:], self.real[self.start_end[1]:],
+                              self.imag[self.start_end[1]:])
         transform = UpdateableFourierTransform(f1, f2)
 
         reflcalc = ReflectionCalculation(None, 0, self.thickness + self.offset, 0.1)
 
-        interpolation = ReflectivityAmplitudeInterpolation(transform, self.k_interpolation_range, rec, reflcalc, constrain)
+        interpolation = ReflectivityAmplitudeInterpolation(transform, self.k_interpolation_range, rec, reflcalc,
+                                                           constrain)
         interpolation.set_hook(self._plot_hook)
 
         interpolation.interpolate(self.iterations, tolerance=self.tolerance)

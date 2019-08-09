@@ -2,14 +2,8 @@ import numpy
 import scipy.interpolate
 
 from dinv.helper import TestRun
-import dinv
-from dinv.glm import _debug
-
-
-dinv.glm._debug = False
 
 numpy.random.seed(1)
-
 numpy.set_printoptions(precision=2, linewidth=220)
 
 
@@ -23,6 +17,7 @@ def constrain(potential, x_space):
     return interpolation
 
 
+print("might take some time to calculate the initial reflectivity ...")
 test = TestRun("profile.dat")
 
 test.cutoff = 0.009
