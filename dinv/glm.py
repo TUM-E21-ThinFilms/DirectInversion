@@ -16,9 +16,11 @@ try:
 except:
     _debug = False
 
+
 def benchmark_start():
     global _bm_after, _bm_before
     _bm_before = time.time()
+
 
 def benchmark_stop(text):
     global _bm_after, _bm_before
@@ -26,6 +28,49 @@ def benchmark_stop(text):
     diff = _bm_after - _bm_before
     if _debug:
         print(text.format(str(diff) + " s"))
+
+
+class GeneralFourierTransform(object):
+    def __init__(self, function_support_range, function):
+        self._range = function_support_range
+        self._f = function
+
+        self._spacing = self._range[1] - self._range[0]
+
+        self._feval = [self._f(x) for x in self._range]
+        self._cache = {}
+        self.method = self.fourier
+
+    def reset(self):
+        self._cache = {}
+
+    def __call__(self, *args, **kwargs):
+        w = args[0]
+        if w not in self._cache:
+            # print("calculating at {}".format(w))
+            self._cache[w] = self.method(w)
+
+        return self._cache[w]
+
+    def update(self, k_range, values):
+        old = list(self._feval[0:len(values)])
+
+        if len(values) == len(self._feval):
+            self._feval = values
+        else:
+            self._feval[0:len(values)] = values
+
+        self._cache = {}
+
+        return numpy.max(abs(old - values))
+
+    def fourier(self, w):
+        return scipy.integrate.trapz(self._feval * numpy.exp(-1j * w * self._range), dx=self._spacing)
+
+    def fourier_inverse(self, w):
+        return 1 / (2 * math.pi) * scipy.integrate.trapz(self._feval * numpy.exp(1j * w * self._range),
+                                                         dx=self._spacing)
+
 
 class FourierTransform(object):
     def __init__(self, k_range, real_part, imaginary_part=None, offset=0, cache=None):
@@ -126,6 +171,7 @@ class FourierTransform(object):
 
         self._cache = {}
 
+        # Todo: maybe include the imaginary part in diff, too?
         return numpy.max(abs(old_r - r))
 
     def fourier_transform(self, w):
@@ -163,10 +209,14 @@ class UpdateableFourierTransform(FourierTransform):
         # just update f1, which contains R(k) for small k
         return self._f1.update(k_range, values)
 
+    def fourier_inverse(self, w):
+        return self._f1.fourier_inverse(w) + self._f2.fourier_inverse(w)
+
     def __call__(self, *args, **kwargs):
         w = args[0]
 
         return self._f1(w) + self._f2(w)
+
 
 # can be removed
 def reconstruct_imaginary_reflection(real_reflection, first_imaginary):
@@ -303,7 +353,7 @@ class GLMSolver(object):
         self._cached_G = G
         self._last_N = N
 
-        #self._invA = numpy.linalg.inv(A)
+        # self._invA = numpy.linalg.inv(A)
         benchmark_start()
         _, L, U = scipy.linalg.lu(A)
         benchmark_stop("Calculating  LU decomposition: {}")
@@ -333,15 +383,14 @@ class GLMSolver(object):
         Linv = self._Lprev
         U = self._Uprev
         G = self._cached_G
-        #invA = self._invA
-
+        # invA = self._invA
 
         pot = []
         benchmark_start()
         for k in range(0, self._last_N + 1, 2):
 
-            #x = -numpy.dot(invA[-1,], G)
-            #pot.append(x)
+            # x = -numpy.dot(invA[-1,], G)
+            # pot.append(x)
 
             y = -numpy.dot(Linv[-1,], G)
 
@@ -350,12 +399,12 @@ class GLMSolver(object):
             if k == 0:
                 pot.append(y / (U[-1][-1]))
             else:
-                pot.append(2 * y / (U[-1][-1]+1))
+                pot.append(2 * y / (U[-1][-1] + 1))
 
             Linv = Linv[1:-1, 1:-1]
             U = U[1:-1, 1:-1]
 
-            #invA = invA[1:-1, 1:-1]
+            # invA = invA[1:-1, 1:-1]
             G = G[0:-2]
 
         benchmark_stop("Calculating Kernel: {}")
@@ -432,12 +481,30 @@ class PotentialReconstruction(object):
 
         pot = 2 / (4 * math.pi) * numpy.gradient(solution, self._dx, edge_order=2)
 
-
         if self._cut > 0:
             pot[0:self._cut] = 0
             pot[-self._cut:] = 0
 
         potential = scipy.interpolate.interp1d(self._xspace, pot, fill_value=(0, 0), bounds_error=False)
+
+        return potential
+
+
+class BornApproximationPotentialReconstruction(PotentialReconstruction):
+    def reconstruct(self, fourier_transform):
+        #assert isinstance(fourier_transform, GeneralFourierTransform)
+
+        # self._xspace, self._dx = numpy.linspace(0, self._end, self._prec * self._end + 1, retstep=True)
+
+        inv = [fourier_transform.fourier_inverse(2 * x).real for x in self._xspace]
+
+        pot = 4*numpy.gradient(inv, self._dx, edge_order=2) #* 1 / (math.pi)
+
+        if self._cut > 0:
+            pot[0:self._cut] = 0
+            pot[-self._cut:] = 0
+
+        potential = scipy.interpolate.interp1d(self._xspace, pot, fill_value=(0, 0), bounds_error=False, kind='linear')
 
         return potential
 
@@ -449,9 +516,19 @@ class ReflectionCalculation(object):
         self._z1 = z_max
         self._dz = dz
 
-    def plot_potential(self):
+        self._rho = None
+
+    def __call__(self, *args, **kwargs):
+        k = args[0]
+        return self.refl(2 * k)
+
+    def plot_potential(self, style='--', label=''):
         z_space = numpy.linspace(self._z0, self._z1, (self._z1 - self._z0) / self._dz + 1)
-        pylab.plot(z_space, self._pot(z_space))
+        pylab.plot(z_space, self._pot(z_space), style, label=label)
+
+    def set_potential(self, potential_function):
+        self._pot = potential_function
+        self._rho = None
 
     def refl(self, Q):
 
@@ -460,8 +537,11 @@ class ReflectionCalculation(object):
         z_space = numpy.linspace(self._z0, self._z1, (self._z1 - self._z0) / self._dz + 1)
         dz = numpy.hstack((0, numpy.diff(z_space), 0))
 
-        # refl wants to have SLD*1e6
-        rho = numpy.hstack((0, array([self._pot(z) * 1e6 for z in z_space])))
+        if self._rho is None:
+            # refl wants to have SLD*1e6
+            self._rho = numpy.hstack((0, array([self._pot(z) * 1e6 for z in z_space])))
+
+        rho = self._rho
 
         R = reflectivity_amplitude(kz=Q / 2, depth=dz, rho=rho)
         # TODO: fix the wrong sign
@@ -479,7 +559,7 @@ class ReflectionCalculation(object):
         return refl(Q, dz, rho)
         """
 
-    def plot_ampl(self, q_space, scale=True):
+    def plot_ampl(self, q_space, scale=True, style='-'):
         if scale:
             refl = [self.refl(q) * q ** 2 for q in q_space]
         else:
@@ -487,15 +567,14 @@ class ReflectionCalculation(object):
 
         Rreal = array([r.real for r in refl])
 
-        # TODO: imag has a sign error
-        Rimag = array([-r.imag for r in refl])
+        Rimag = array([r.imag for r in refl])
 
-        pylab.plot(q_space, Rreal)
-        pylab.plot(q_space, Rimag)
+        pylab.plot(q_space, Rreal, style)
+        pylab.plot(q_space, Rimag, style)
 
         pylab.legend(["Real R", "Imag R"])
-        pylab.xlabel("q_space")
-        pylab.ylabel("q^2 R")
+        pylab.xlabel("q")
+        pylab.ylabel("q^2 * R")
 
     def plot_refl(self, q_space):
 
@@ -506,12 +585,36 @@ class ReflectionCalculation(object):
         pylab.legend()
         pylab.xlabel("q_space")
         pylab.ylabel("log R")
-        pylab.yscale('log')
+        pylab.yscale("log")
 
+
+class BornApproximationReflectionCalculation(ReflectionCalculation):
+
+    def __init__(self, potential_function, z_min, z_max, dz):
+        super(BornApproximationReflectionCalculation, self).__init__(potential_function, z_min, z_max, dz)
+        self._fourier = None
+
+    def set_potential(self, potential_function):
+        super(BornApproximationReflectionCalculation, self).set_potential(potential_function)
+        self._fourier = None
+
+    def refl(self, Q):
+        if self._fourier is None:
+            z_space = numpy.linspace(self._z0, self._z1, (self._z1 - self._z0) / self._dz + 1)
+            self._fourier = GeneralFourierTransform(z_space, self._pot)
+
+        R = 1/(1j * Q) * self._fourier(Q) #* 2 * math.pi
+
+        # TODO: wrong sign
+        return (R.real + 1j * R.imag)
+
+    def reflection(self, k_range):
+        refl = [self.refl(2*k) for k in k_range]
+        return scipy.interpolate.interp1d(k_range, refl, fill_value=(0, 0), bounds_error=False, kind='linear')
 
 
 class ReflectivityAmplitudeInterpolation(object):
-    def __init__(self, transform, k_interpolation_range, potential_reconstruction, constraint):
+    def __init__(self, transform, k_interpolation_range, potential_reconstruction, reflection_calculation, constraint):
         self._transform = transform
         self._rec = potential_reconstruction
         self._constraint = constraint
@@ -522,15 +625,13 @@ class ReflectivityAmplitudeInterpolation(object):
         self.potential = None
         self.reflectivity = []
         self.is_last_iteration = False
-        self.reflcalc = None
+        self.reflcalc = reflection_calculation
 
     def set_hook(self, hook):
         self._hook = hook
 
     def interpolate(self, max_iterations, tolerance=1e-8):
-
         for self.iteration in range(1, max_iterations + 1):
-
             benchmark_start()
             self.potential = self._rec.reconstruct(self._transform)
             self.potential = self._constraint(self.potential, self._rec._xspace)
@@ -538,12 +639,13 @@ class ReflectivityAmplitudeInterpolation(object):
 
             benchmark_start()
             # Use the new reflection coefficient for small k-values and re-do the inversion ...
-            self.reflcalc = ReflectionCalculation(self.potential, 0, self._rec._end, 0.1)
+            self.reflcalc.set_potential(self.potential)
             self.reflectivity = self.reflcalc.refl(2 * self._range)
             diff = self._transform.update(self._range, self.reflectivity)
             benchmark_stop("Updated amplitudes: {}")
 
             if diff < tolerance or self.iteration == max_iterations:
+                # set this before _hook, so that the hook knows its the last iteration
                 self.is_last_iteration = True
 
             if self._hook is not None:

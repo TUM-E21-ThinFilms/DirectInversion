@@ -12,7 +12,7 @@ def load_potential(file):
     potential = numpy.loadtxt(file).T
     potential[1] = 1e-6 * numpy.flip(potential[1])
     # potential[1] *= 1e-6
-    return scipy.interpolate.interp1d(potential[0], potential[1], fill_value=(0, 0), bounds_error=False, kind='nearest')
+    return scipy.interpolate.interp1d(potential[0], potential[1], fill_value=(0, 0), bounds_error=False, kind='linear')
 
 
 def shift_potential(potential, offset):
@@ -60,8 +60,6 @@ class TestRun(object):
 
         self.plot_every_nth = 10
 
-
-
         self.legends = []
 
         self.file = file
@@ -69,7 +67,7 @@ class TestRun(object):
     def setup(self):
 
         self.plot_potential_space = numpy.linspace(0, self.thickness + self.offset, 10 * (self.thickness + self.offset)+1)
-        self.k_space = numpy.linspace(0, self.q_max / 2, self.q_precision * self.q_max * 1000 + 1)
+        self.k_space = numpy.linspace(0, self.q_max / 2.0, self.q_precision * self.q_max * 1000 + 1)
 
         self.start_end = (0, numpy.argmax(self.k_space > self.cutoff))
         self.k_interpolation_range = self.k_space[self.start_end[0]:self.start_end[1]]
@@ -84,7 +82,6 @@ class TestRun(object):
         self.imag = shake(self.reflectivity.imag, self.start_end, self.noise)
 
     def _plot_exact(self):
-
 
         if self.plot_potential:
             transform = FourierTransform(self.k_space, self.reflectivity.real, self.reflectivity.imag)
@@ -120,7 +117,6 @@ class TestRun(object):
         interpolated_reflectivity = interpolator.reflectivity.real
         is_last = interpolator.is_last_iteration
 
-
         if iteration % self.plot_every_nth == 0 or is_last is True or iteration == 1:
 
             if self.plot_potential:
@@ -145,8 +141,6 @@ class TestRun(object):
         self._plot_exact()
 
         rec = PotentialReconstruction(self.thickness + self.offset, self.precision, cutoff=self.pot_cutoff)
-
-
         # split the fourier transform up into two parts
         # f1 has the changing input
         # f2 has the non-changing input
@@ -156,7 +150,9 @@ class TestRun(object):
         f2 = FourierTransform(self.k_space[self.start_end[1]:], self.real[self.start_end[1]:], self.imag[self.start_end[1]:])
         transform = UpdateableFourierTransform(f1, f2)
 
-        interpolation = ReflectivityAmplitudeInterpolation(transform, self.k_interpolation_range, rec, constrain)
+        reflcalc = ReflectionCalculation(None, 0, self.thickness + self.offset, 0.1)
+
+        interpolation = ReflectivityAmplitudeInterpolation(transform, self.k_interpolation_range, rec, reflcalc, constrain)
         interpolation.set_hook(self._plot_hook)
 
         interpolation.interpolate(self.iterations, tolerance=self.tolerance)
