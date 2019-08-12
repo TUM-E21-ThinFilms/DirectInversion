@@ -1,5 +1,4 @@
 import numpy
-import math
 import pylab
 
 import scipy.integrate
@@ -25,7 +24,6 @@ class GeneralFourierTransform(object):
     def __call__(self, *args, **kwargs):
         w = args[0]
         if w not in self._cache:
-            # print("calculating at {}".format(w))
             self._cache[w] = self.method(w)
 
         return self._cache[w]

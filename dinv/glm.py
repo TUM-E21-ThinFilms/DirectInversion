@@ -1,4 +1,3 @@
-import time
 import numpy
 import pylab
 
@@ -7,7 +6,7 @@ import scipy.interpolate
 
 from numpy import array, pi
 
-from dinv.fourier import FourierTransform, GeneralFourierTransform
+from dinv.fourier import FourierTransform
 from dinv.util import benchmark_start, benchmark_stop
 
 
@@ -260,25 +259,6 @@ class PotentialReconstruction(object):
         return potential
 
 
-class BornApproximationPotentialReconstruction(PotentialReconstruction):
-    def reconstruct(self, fourier_transform):
-        # assert isinstance(fourier_transform, GeneralFourierTransform)
-
-        # self._xspace, self._dx = numpy.linspace(0, self._end, self._prec * self._end + 1, retstep=True)
-
-        inv = [fourier_transform.fourier_inverse(2 * x).real for x in self._xspace]
-
-        pot = 4 * numpy.gradient(inv, self._dx, edge_order=2)  # * 1 / (pi)
-
-        if self._cut > 0:
-            pot[0:self._cut] = 0
-            pot[-self._cut:] = 0
-
-        potential = scipy.interpolate.interp1d(self._xspace, pot, fill_value=(0, 0), bounds_error=False, kind='linear')
-
-        return potential
-
-
 class ReflectionCalculation(object):
     def __init__(self, potential_function, z_min, z_max, dz):
         self._pot = potential_function
@@ -300,7 +280,7 @@ class ReflectionCalculation(object):
         self._pot = potential_function
         self._rho = None
 
-    def refl(self, Q):
+    def refl(self, q):
 
         from refl1d.reflectivity import reflectivity_amplitude
 
@@ -313,21 +293,13 @@ class ReflectionCalculation(object):
 
         rho = self._rho
 
-        R = reflectivity_amplitude(kz=Q / 2, depth=dz, rho=rho)
-        # TODO: fix the wrong sign
+        R = reflectivity_amplitude(kz=q / 2, depth=dz, rho=rho)
+
+        # TODO: fix the wrong sign. Note, the 'wrong' sign is actually correct. the sign should be changed
+        # in the reflectivity calculation module. but not my problem ...
         R.imag = -R.imag
 
         return R
-
-        """
-        z_space = numpy.linspace(self._z0, self._z1, (self._z1 - self._z0) / self._dz + 1)
-        dz = numpy.hstack((0, numpy.diff(z_space), 0))
-
-        # refl wants to have SLD*1e6
-        rho = numpy.hstack((0, array([self._pot(z) * 1e6 for z in z_space]), 0))
-
-        return refl(Q, dz, rho)
-        """
 
     def plot_ampl(self, q_space, scale=True, style='-'):
         if scale:
@@ -356,31 +328,6 @@ class ReflectionCalculation(object):
         pylab.xlabel("q_space")
         pylab.ylabel("log R")
         pylab.yscale("log")
-
-
-class BornApproximationReflectionCalculation(ReflectionCalculation):
-
-    def __init__(self, potential_function, z_min, z_max, dz):
-        super(BornApproximationReflectionCalculation, self).__init__(potential_function, z_min, z_max, dz)
-        self._fourier = None
-
-    def set_potential(self, potential_function):
-        super(BornApproximationReflectionCalculation, self).set_potential(potential_function)
-        self._fourier = None
-
-    def refl(self, Q):
-        if self._fourier is None:
-            z_space = numpy.linspace(self._z0, self._z1, (self._z1 - self._z0) / self._dz + 1)
-            self._fourier = GeneralFourierTransform(z_space, self._pot)
-
-        R = 1 / (1j * Q) * self._fourier(Q)  # * 2 * pi
-
-        # TODO: wrong sign
-        return (R.real + 1j * R.imag)
-
-    def reflection(self, k_range):
-        refl = [self.refl(2 * k) for k in k_range]
-        return scipy.interpolate.interp1d(k_range, refl, fill_value=(0, 0), bounds_error=False, kind='linear')
 
 
 class ReflectivityAmplitudeInterpolation(object):
