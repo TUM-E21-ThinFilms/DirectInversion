@@ -12,17 +12,17 @@ numpy.set_printoptions(linewidth=210, precision=4)
 
 thickness = 250
 
-k_start = 1e-6
-k_split = 0.005
+k_start = 1e-7
+k_split = 0.001
 k_end = 5
 
 k_space_full = numpy.linspace(k_start, k_end, 5001)
-
-k_space = numpy.linspace(k_split, 1, 5001)
-x_space = numpy.linspace(-10, thickness, 10000)
-k_rec_space = numpy.linspace(k_start, k_split, 20)
+k_space = numpy.linspace(k_split, k_end, 5001)
+k_rec_space = numpy.linspace(k_start, k_split, 10)
 
 k_plot_space = numpy.linspace(k_start, 0.2, 1000)
+x_space = numpy.linspace(-10, thickness, 10000)
+
 
 potential = load_potential("profile.dat")
 potential = shift_potential(potential, 50)
@@ -52,8 +52,8 @@ numpy.random.seed(1)
 def constrain(potential, x_space):
     data = potential(x_space)
 
-    # data[(x_space <= 40)] = 0e-6
-    # data[(x_space >= 202)] = 0e-6
+    #data[(x_space <= 35)] = 0e-6
+    #data[(x_space >= 210)] = 0e-6
     # data[(x_space >= 125) & (x_space <= 450)] = 4.662e-6
     # data[(x_space <= 690)] = 0e-6
 

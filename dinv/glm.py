@@ -370,3 +370,5 @@ class ReflectivityAmplitudeInterpolation(object):
 
             if diff < tolerance:
                 break
+
+        return self.reflectivity

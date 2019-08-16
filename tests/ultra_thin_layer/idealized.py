@@ -2,11 +2,6 @@ import numpy
 import scipy.interpolate
 
 from dinv.helper import TestRun
-import dinv
-from dinv.glm import _debug
-
-
-dinv.glm._debug = False
 
 numpy.random.seed(1)
 
@@ -33,7 +28,7 @@ test.thickness = 100
 test.precision = 2
 test.pot_cutoff = 2
 test.plot_every_nth = 10
-test.q_max = 50
+test.q_max = 5
 
 test.plot_potential = True
 test.plot_phase = False

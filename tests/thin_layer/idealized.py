@@ -19,7 +19,7 @@ def constrain(potential, x_space):
 
 test = TestRun("profile.dat")
 
-test.cutoff = 0.01
+test.cutoff = 0.001
 test.noise = 0
 test.iterations = 100
 test.tolerance = 1e-8
@@ -28,7 +28,7 @@ test.thickness = 180
 test.precision = 2
 test.pot_cutoff = 2
 test.plot_every_nth = 30
-test.q_max = 10
+test.q_max = 0.2
 
 
 test.plot_potential = True

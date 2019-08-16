@@ -5,14 +5,14 @@ from dinv.helper import TestRun
 
 numpy.random.seed(1)
 
-numpy.set_printoptions(precision=2, linewidth=210)
+numpy.set_printoptions(precision=2, linewidth=220)
 
 
 def constrain(potential, x_space):
     data = potential(x_space)
 
     data[(x_space >= 520)] = 0e-6
-    data[(x_space >= 105) & (x_space <= 305)] = 4.662e-6
+    data[(x_space >= 105) & (x_space <= 205)] = 4.662e-6
 
     interpolation = scipy.interpolate.interp1d(x_space, data, fill_value=(0, 0), bounds_error=False)
     return interpolation
