@@ -25,6 +25,7 @@ data/
 *.egg-info/
 .installed.cfg
 *.egg
+*.dat
 MANIFEST
 
 # PyInstaller
