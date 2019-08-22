@@ -13,6 +13,25 @@ def load_potential(file):
     # potential[1] *= 1e-6
     return scipy.interpolate.interp1d(potential[0], potential[1], fill_value=(0, 0), bounds_error=False, kind='linear')
 
+def load_potential_bumps(file, spin_state = 'up'):
+    potential = numpy.loadtxt(file).T
+
+    if spin_state is 'up' or spin_state == '+':
+        sgn = 1
+    else:
+        sgn = -1
+
+    print("Selected spin-state {}".format(sgn))
+
+    z = potential[0]
+    # might help for figuring out the correct offset ;)
+    # print(numpy.min(z))
+
+    rho, rhoM = potential[1], potential[3]
+
+    V = 1e-6 * numpy.flip(rho + sgn * rhoM)
+
+    return scipy.interpolate.interp1d(z, V, fill_value=(0, 0), bounds_error=False, kind='linear')
 
 def shift_potential(potential, offset):
     return lambda x: potential(x - offset)
@@ -29,7 +48,7 @@ def shake(var, start_end, noise=0.0, start=0):
 
 
 class TestRun(object):
-    def __init__(self, file):
+    def __init__(self, file_or_potential):
         # Sets R(k) = uniform(-1, 1) for k < cutoff
         # 0.1 is approximately the critical edge for Si
         self.cutoff = 0.1
@@ -58,12 +77,17 @@ class TestRun(object):
         self.plot_reflectivity = False
 
         self.plot_every_nth = 10
+        self.show_plot = True
 
         self.legends = []
 
         self.use_only_real_part = False
 
-        self.file = file
+        if isinstance(file_or_potential, str):
+            self.file = file_or_potential
+        else:
+            self.ideal_potential = file_or_potential
+
         self.store_path = None
 
         self.start = [0]
@@ -74,10 +98,13 @@ class TestRun(object):
                                                    10 * (self.thickness + self.offset) + 1)
         self.k_space = numpy.linspace(0, self.q_max / 2.0, int(self.q_precision * self.q_max * 1000) + 1)
 
+
         self.start_end = (0, numpy.argmax(self.k_space > self.cutoff))
         self.k_interpolation_range = self.k_space[self.start_end[0]:self.start_end[1]]
 
-        self.ideal_potential = load_potential(self.file)
+        if self.ideal_potential is None:
+            self.ideal_potential = load_potential(self.file)
+
         self.ideal_potential = shift_potential(self.ideal_potential, self.offset)
         self.reflcalc = ReflectionCalculation(self.ideal_potential, 0, self.thickness + self.offset, 0.1)
 
@@ -122,8 +149,8 @@ class TestRun(object):
         if self.plot_reflectivity:
             refl_ideal = self.reflcalc.refl(2 * self.k_space)
 
-            self.store_data(zip(2*self.k_space, self.reflectivity.real, self.reflectivity.imag, abs(self.reflectivity)**2), 'refl_exact', 'reflectivity')
-            self.store_data(zip(2*self.k_space, refl_ideal.real, refl_ideal.imag, abs(refl_ideal)**2), 'refl_ideal', 'reflectivity')
+            self.store_data(zip(2*self.k_space, abs(self.reflectivity)**2), 'refl_exact', 'reflectivity')
+            self.store_data(zip(2*self.k_space, abs(refl_ideal)**2), 'refl_ideal', 'reflectivity')
 
             pylab.plot(2 * self.k_space, self.reflectivity.real ** 2 + self.reflectivity.imag ** 2)
             pylab.plot(2 * self.k_space, self.real ** 2 + self.imag ** 2)
@@ -176,7 +203,7 @@ class TestRun(object):
         elif header == 'phase':
             header = ["k [1/Ang]", "Re R [1]", "Im R [1]", "k^2 * Re R [1/Ang^2]", "k^2 * Im R [1/Ang^2]"]
         elif header == 'reflectivity':
-            header = ["q [1/Ang]", "Re R [1]", "Im R [1]", "|R|^2 [1]"]
+            header = ["q [1/Ang]", "|R|^2 [1]"]
 
         if len(header) > 0:
             header = "\t".join(header)
@@ -215,6 +242,7 @@ class TestRun(object):
         print(list(solution))
 
         pylab.legend(self.legends)
-        pylab.show()
+        if self.show_plot:
+            pylab.show()
 
 

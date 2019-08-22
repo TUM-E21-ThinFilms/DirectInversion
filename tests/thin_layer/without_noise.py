@@ -25,7 +25,7 @@ test.iterations = 100
 test.tolerance = 1e-8
 test.offset = 20
 test.thickness = 180
-test.precision = 2
+test.precision = 4
 test.pot_cutoff = 2
 test.plot_every_nth = 10
 test.use_only_real_part = True
@@ -33,8 +33,8 @@ test.q_max = 0.25
 
 test.store_path = 'store/'
 
-test.plot_potential = False
-test.plot_phase = True
+test.plot_potential = True
+test.plot_phase = False
 test.plot_reflectivity = False
 
 test.run(constrain)

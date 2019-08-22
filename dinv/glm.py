@@ -122,7 +122,6 @@ class GLMSolver(object):
         self._cached_G = G
         self._last_N = N
 
-        # self._invA = numpy.linalg.inv(A)
         benchmark_start()
         _, L, U = scipy.linalg.lu(A)
         benchmark_stop("Calculating  LU decomposition: {}")
@@ -163,7 +162,7 @@ class GLMSolver(object):
 
             y = -numpy.dot(Linv[-1,], G)
 
-            # For the first entry we dont have to scale the column by something since this was done by the init method
+            # For the first entry we don't have to scale the column by something since this was done by the init method
             # but all other column vectors have to "receive" this treatment
             if k == 0:
                 pot.append(y / (U[-1][-1]))
@@ -172,13 +171,11 @@ class GLMSolver(object):
 
             Linv = Linv[1:-1, 1:-1]
             U = U[1:-1, 1:-1]
-
-            # invA = invA[1:-1, 1:-1]
             G = G[0:-2]
 
         benchmark_stop("Calculating Kernel: {}")
         # Since we reconstruct from the "outmost" to the inner matrix, we reverse the list.
-        # usually, you start with the smallest matrix and construct from that a bigger matrix. But that wouldnt save
+        # usually, you start with the smallest matrix and construct from that a bigger matrix. But that wouldn't save
         # computation time.
         return array(list(reversed(pot)))
 
