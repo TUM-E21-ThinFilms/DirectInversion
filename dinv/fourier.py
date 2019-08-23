@@ -8,6 +8,26 @@ from numpy import array, pi
 
 
 class GeneralFourierTransform(object):
+    """
+    Compute the fourier transform (and its inverse) of a callable function f
+
+    The fourier transform is calculated via
+        F(f)(w) := \int_{-\infty}^{\infty}{f(k) \exp{-ikw} \mathrm d k}
+
+    and the inverse transform is calculated via
+        F^{-1}(f)(w) := \frac{1}{2\pi} \int_{-\infty}^{\infty}{f(k) \exp{ikw} \mathrm d k}
+
+    There are no restrictions on the function f. Together with the function_support_range the fourier transform is
+    numerically integrated (scipy's trapezoidal rule) on this set.
+
+    The function_support_range is assumed to be equidistant and the function value f should not change over time (ie.
+    f should always return the same value)
+
+    The function is assumed to be zero outside of function_support_range
+
+    :param function_support_range: Any range object (range, numpy.linspace)
+    :param function: any callable function f: function_support_range -> RealNumbers/ComplexNumbers
+    """
     def __init__(self, function_support_range, function):
         self._range = function_support_range
         self._f = function
@@ -29,6 +49,7 @@ class GeneralFourierTransform(object):
         return self._cache[w]
 
     def update(self, k_range, values):
+        # k_range is not needed, maybe in the future?
         old = list(self._feval[0:len(values)])
 
         if len(values) == len(self._feval):
@@ -49,7 +70,6 @@ class GeneralFourierTransform(object):
 
 class FourierTransform(object):
     def __init__(self, k_range, real_part, imaginary_part=None, offset=0, cache=None):
-        # TODO: is doc still ok?
         """
         Calculates the continuous fourier transform F(f)(w)
 
@@ -127,7 +147,6 @@ class FourierTransform(object):
             return 0.0
 
         if not w in self._cache:
-            # print("calculating at {}".format(w))
             self._cache[w] = self.method(w)
 
         return self._cache[w]
@@ -176,6 +195,19 @@ class FourierTransform(object):
 
 
 class UpdateableFourierTransform(FourierTransform):
+    """
+    Puts two 'partial' fourier transforms into one.
+
+    Since the fourier transform is linear, we can split up the fourier transform into two parts.
+
+    Since we're updating a function only on a subset of it's domain, it's easy to cache the calculations on the subset
+    which did not change.
+
+    We assume, the function value does only change f1, i.e. the lower part of the function. f2 stays fixed:
+    So we save the computation of the second part, if only f1 changes:
+
+    F[f](x) = \int_{0}^{k} f1(w) exp(-iwx) dx +  \int_{k}^{\infty} f2(w) exp(-iwx) dx
+    """
     def __init__(self, f1, f2):
         self._f1 = f1
         self._f2 = f2
@@ -185,9 +217,9 @@ class UpdateableFourierTransform(FourierTransform):
         return self._f1.update(k_range, values)
 
     def fourier_inverse(self, w):
+        # Allow this method to be called
         return self._f1.fourier_inverse(w) + self._f2.fourier_inverse(w)
 
     def __call__(self, *args, **kwargs):
         w = args[0]
-
         return self._f1(w) + self._f2(w)

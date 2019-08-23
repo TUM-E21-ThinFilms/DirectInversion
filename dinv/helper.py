@@ -8,12 +8,29 @@ from dinv.fourier import UpdateableFourierTransform, FourierTransform
 
 
 def load_potential(file):
+    """
+    Loads a generic potential created by refl1d from a file.
+    The first column are the x-values
+    The second column are the V(x) values
+
+    :param file:
+    :return: Callable potential function
+    """
     potential = numpy.loadtxt(file).T
     potential[1] = 1e-6 * numpy.flip(potential[1])
     # potential[1] *= 1e-6
     return scipy.interpolate.interp1d(potential[0], potential[1], fill_value=(0, 0), bounds_error=False, kind='linear')
 
-def load_potential_bumps(file, spin_state = 'up'):
+
+def load_potential_bumps(file, spin_state='up'):
+    """
+    Loads a generic potential created by the fitting of refl1d from a file.
+
+    :param file:
+    :param spin_state: If the potential is magnetic, the potential changes based on the spin type of the neutrons. S
+                    Select either "up"/"+" or "down"/"-".
+    :return: Callable potential function
+    """
     potential = numpy.loadtxt(file).T
 
     if spin_state is 'up' or spin_state == '+':
@@ -33,11 +50,28 @@ def load_potential_bumps(file, spin_state = 'up'):
 
     return scipy.interpolate.interp1d(z, V, fill_value=(0, 0), bounds_error=False, kind='linear')
 
+
 def shift_potential(potential, offset):
+    """
+    Shifts a potential by offset to the right
+
+    :param potential:
+    :param offset:
+    :return:
+    """
     return lambda x: potential(x - offset)
 
 
 def shake(var, start_end, noise=0.0, start=0):
+    """
+    "Shakes" a reflectivity amplitude, i.e. setting it to zero in a given range and adding noise.
+
+    :param var:
+    :param start_end:
+    :param noise:
+    :param start:
+    :return:
+    """
     # make a copy
     var = array(list(var))
 
@@ -48,56 +82,81 @@ def shake(var, start_end, noise=0.0, start=0):
 
 
 class TestRun(object):
+    """
+    This class is used for some numerical simulations of given potentials. This sets-up the required classes to do a
+    reflectivity amplitude interpolation.
+
+    On top of that, it has some nice plotting features, to see how the potential/reflection amplitzde/reflectivity is
+    evolving for each iteration.
+
+    The algorithm can be adjusted by changing the attributes defined in __init__.
+    """
+
     def __init__(self, file_or_potential):
-        # Sets R(k) = uniform(-1, 1) for k < cutoff
+
+        # Starting value for the iteration. 'exact' is possible. This will start the iteration at the exact reflectivity
+        # amplitude. None/0 will start with a reflectivity amplitude being 0 below the critical edge, see self.cutoff
+        self.start = [0]
+
+        # Sets R(k) = self.start for k < cutoff
         # 0.1 is approximately the critical edge for Si
         self.cutoff = 0.1
+
         # adds gaussian noise to R(q)
         self.noise = 5e-2
 
+        # Max number of iteration till abortion
         self.iterations = 30
 
+        # Algorithm terminates after R(k) is changing less than the given tolerance
         self.tolerance = 1e-8
 
+        # Shifts the potential to the right, usefull when dealing with potential having a rough surface
         self.offset = 20  # -500
 
+        # Film thickness
         self.thickness = 520
 
-        # int, 1/precision is the discretization distance
+        # int, 1/precision is the discretization step
         self.precision = 1
 
         # This will set values close to the boundary to 0
         self.pot_cutoff = 2
 
+        # simulated R(k) up to k = q_max / 2
         self.q_max = 0.5
+        # Simulation precision. Higher values simulates R(k) more densely.
         self.q_precision = 1
 
-        self.plot_potential = True
-        self.plot_phase = False
-        self.plot_reflectivity = False
-
-        self.plot_every_nth = 10
-        self.show_plot = True
-
-        self.legends = []
-
+        # For the algorithm, use only the real part of R(k)?
+        # TODO: also only use the imaginary part?
         self.use_only_real_part = False
 
+        # Plot the potential?
+        self.plot_potential = True
+        # Plot the reflectivity amplitude?
+        self.plot_phase = False
+        # Plot the reflectivity?
+        self.plot_reflectivity = False
+        # Plot not every iteration, but every n-th
+        self.plot_every_nth = 10
+        # Plot anything at all
+        self.show_plot = True
+        # Store the results into this given path. If None, do not save to file. Will only store every n-th iteration
+        self.store_path = None
+
+        # Load potential from a file or accept a given potential function
         if isinstance(file_or_potential, str):
             self.file = file_or_potential
         else:
             self.ideal_potential = file_or_potential
 
-        self.store_path = None
-
-        self.start = [0]
-
     def setup(self):
+        self.legends = []
 
         self.plot_potential_space = numpy.linspace(0, self.thickness + self.offset,
                                                    10 * (self.thickness + self.offset) + 1)
         self.k_space = numpy.linspace(0, self.q_max / 2.0, int(self.q_precision * self.q_max * 1000) + 1)
-
 
         self.start_end = (0, numpy.argmax(self.k_space > self.cutoff))
         self.k_interpolation_range = self.k_space[self.start_end[0]:self.start_end[1]]
@@ -126,14 +185,15 @@ class TestRun(object):
         potential = rec.reconstruct(transform)
 
         if self.plot_potential:
-
             # cosine transform doesnt use imaginary part of the reflectivity amplitude
             # transform.method = transform.cosine_transform
 
             self.reference_potential = potential
 
-            self.store_data(zip(self.plot_potential_space, self.ideal_potential(self.plot_potential_space)), 'pot_exact', 'potential')
-            self.store_data(zip(self.plot_potential_space, potential(self.plot_potential_space)), 'pot_ideal', 'potential')
+            self.store_data(zip(self.plot_potential_space, self.ideal_potential(self.plot_potential_space)),
+                            'pot_exact', 'potential')
+            self.store_data(zip(self.plot_potential_space, potential(self.plot_potential_space)), 'pot_ideal',
+                            'potential')
 
             pylab.plot(self.plot_potential_space, self.ideal_potential(self.plot_potential_space))
             pylab.plot(self.plot_potential_space, potential(self.plot_potential_space), '-', color='black')
@@ -143,14 +203,16 @@ class TestRun(object):
 
         if self.plot_phase:
             pylab.plot(self.k_space, (self.reflectivity.real * self.k_space ** 2))
-            self.store_data(zip(self.k_space, self.reflectivity.real, self.reflectivity.imag, self.reflectivity.real * self.k_space ** 2, self.reflectivity.imag * self.k_space ** 2), 'phase_exact', 'phase')
+            self.store_data(zip(self.k_space, self.reflectivity.real, self.reflectivity.imag,
+                                self.reflectivity.real * self.k_space ** 2, self.reflectivity.imag * self.k_space ** 2),
+                            'phase_exact', 'phase')
             self.legends.append("Exact reflectivity amplitude")
 
         if self.plot_reflectivity:
             refl_ideal = self.reflcalc.refl(2 * self.k_space)
 
-            self.store_data(zip(2*self.k_space, abs(self.reflectivity)**2), 'refl_exact', 'reflectivity')
-            self.store_data(zip(2*self.k_space, abs(refl_ideal)**2), 'refl_ideal', 'reflectivity')
+            self.store_data(zip(2 * self.k_space, abs(self.reflectivity) ** 2), 'refl_exact', 'reflectivity')
+            self.store_data(zip(2 * self.k_space, abs(refl_ideal) ** 2), 'refl_ideal', 'reflectivity')
 
             pylab.plot(2 * self.k_space, self.reflectivity.real ** 2 + self.reflectivity.imag ** 2)
             pylab.plot(2 * self.k_space, self.real ** 2 + self.imag ** 2)
@@ -179,12 +241,14 @@ class TestRun(object):
             if self.plot_phase:
                 k_subspace = self.k_space[0:self.start_end[1]]
                 refl = interpolator.reflectivity
-                self.store_data(zip(k_subspace,  refl.real, refl.imag, refl.real * k_subspace ** 2, refl.imag * k_subspace ** 2), 'phase_it_{}'.format(iteration), 'phase')
+                self.store_data(
+                    zip(k_subspace, refl.real, refl.imag, refl.real * k_subspace ** 2, refl.imag * k_subspace ** 2),
+                    'phase_it_{}'.format(iteration), 'phase')
                 pylab.plot(k_subspace, interpolated_reflectivity * k_subspace ** 2, '.')
 
             if self.plot_reflectivity:
                 R = interpolator.reflcalc.refl(2 * self.k_space)
-                self.store_data(zip(2 * self.k_space, abs(R)**2), 'refl_it_{}'.format(iteration), 'reflectivity')
+                self.store_data(zip(2 * self.k_space, abs(R) ** 2), 'refl_it_{}'.format(iteration), 'reflectivity')
                 pylab.plot(2 * self.k_space, R.real ** 2 + R.imag ** 2, '--')
 
             self.legends.append("Iteration {}".format(iteration))
@@ -213,13 +277,14 @@ class TestRun(object):
     def run(self, constrain):
 
         self.setup()
+        # plot the exact potential/refl/ for comparison
         self._plot_exact()
 
         rec = PotentialReconstruction(self.thickness + self.offset, self.precision, cutoff=self.pot_cutoff)
         # split the fourier transform up into two parts
         # f1 has the changing input
         # f2 has the non-changing input
-        # since f2 contains much more data in general, we can save alot of computation by caching f2 and just
+        # since f2 contains much more data in general, we can save a lot of computation by caching f2 and just
         # computing f1 each time.
         f1 = FourierTransform(self.k_space[:self.start_end[1] + 1], self.real[:self.start_end[1] + 1],
                               self.imag[:self.start_end[1] + 1])
@@ -233,7 +298,8 @@ class TestRun(object):
         transform = UpdateableFourierTransform(f1, f2)
         reflcalc = ReflectionCalculation(None, 0, self.thickness + self.offset, 0.1)
 
-        interpolation = ReflectivityAmplitudeInterpolation(transform, self.k_interpolation_range, rec, reflcalc, constrain)
+        interpolation = ReflectivityAmplitudeInterpolation(transform, self.k_interpolation_range, rec, reflcalc,
+                                                           constrain)
         interpolation.set_hook(self._plot_hook)
 
         solution = interpolation.interpolate(self.iterations, tolerance=self.tolerance)
@@ -244,5 +310,3 @@ class TestRun(object):
         pylab.legend(self.legends)
         if self.show_plot:
             pylab.show()
-
-

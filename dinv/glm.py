@@ -39,8 +39,7 @@ class GLMSolver(object):
         Actually, the condition g(t) = 0 for t < 0 might not be valid. For potentials with roughness at the top layer
         surface, g(0) != 0. But there might be a t0 < 0 such that g(t) = 0 for all t < t0?
 
-
-        Hence, this GLM solver does not reliably work for films having a roughness at the top layer (film -> surrounding)
+        The GLM solver works reliably for surfaces with roughness IF the fourier transform is exact.
     """
 
     def __init__(self, fourier_transform):
@@ -179,6 +178,7 @@ class GLMSolver(object):
         # computation time.
         return array(list(reversed(pot)))
 
+    """
     def solve_new(self, x, precision, max_thickness):
 
         N = 2 * max_thickness * precision
@@ -215,9 +215,26 @@ class GLMSolver(object):
             pot.append(sol[0])
 
         return pot
+    """
 
 
 class PotentialReconstruction(object):
+    """
+    This class reconstructs a potential given the knowledge of the fourier transform of the reflectivity amplitude.
+
+    This class is just a 'convenient' wrapper. The main calculation is done in the GLMSolver.
+    After the GLMSolver returns the diagonal elements of K(x, x), this class just simply calculates V via
+
+        V(x) = 2 d/dx K(x, x)
+
+    :param potential_end: The potential is reconstructed for 0 <= x <= potential_end
+    :param precision: Higher precision leads to more discretization steps for V(x), via delta = 1/precision. Don't use
+                    too high precisions, usually anything betweent 0.25 and 4 is fine.
+    :param shift: Shifts the x-space used for the potential (Has no meaning anymore)
+    :param cutoff: Cuts-off the potential at the end/start of the x-space. The parameters defines how many discretization
+                    steps are cut-off. Since the start and end usually behaves not nicely, a cut-off of 1 is fine.
+    """
+
     def __init__(self, potential_end, precision, shift=0, cutoff=1):
         self._end = potential_end
         self._prec = precision
@@ -257,7 +274,19 @@ class PotentialReconstruction(object):
 
 
 class ReflectionCalculation(object):
-    def __init__(self, potential_function, z_min, z_max, dz):
+    """
+    Calculates the (exact) reflectivity for a given potential in the dynamical theory.
+
+    This is just a wrapper class, the logic for the calculation is in the refl1d package.
+    Plus some nice plotting features.
+
+    :param potential_function: A potential function (callable), to evaluate at any z in [z_min, z_max].
+    :param z_min: min range of function. Note that V(z_min - eps) = 0 for any eps > 0 is assumed.
+    :param z_max: max range of function. Note that V(z_min + eps) = 0 for any eps > 0 is assumed.
+    :param dz: the discretization in the potential, kind of like a "slab" model.
+    """
+
+    def __init__(self, potential_function, z_min, z_max, dz=0.1):
         self._pot = potential_function
         self._z0 = z_min
         self._z1 = z_max
@@ -328,6 +357,27 @@ class ReflectionCalculation(object):
 
 
 class ReflectivityAmplitudeInterpolation(object):
+    """
+    This here is now the 'core' of the algorithm described in the paper.
+
+    Whats happening here?
+    We take a R(k), which is unknown for k <= k_c and interpolate/extrapolate it so that we get a function
+    R(k) for 0 <= k.
+
+    How does it work?
+    Take this R(k), compute a potential from this (this potential is totally off), compute a reflectivity from this
+    potential, and then just take the new reflectivity and update R(k) for all 0 <= k <= k_c and repeat.
+
+    In each step of iteration, a call to hook (see set_hook) is made. The calling program can then update graphs,
+    calculate further things, whatever. This is mainly used to get the information in each iteration available to anyone.
+
+    :param transform: A fourier transform class, containing the reflectivity amplitude
+    :param k_interpolation_range: The range where to update the reflectivity amplitude, usually this is [0, k_c]
+    :param potential_reconstruction: An instance to a potential reconstruction class (see above or ba.py)
+    :param reflection_calculation: An instance to a reflection calculation class (see above or ba.py)
+    :param constraint: A callable function to incorporate additional constraints onto the potential.
+                        See _example_constraint for more info.
+    """
     def __init__(self, transform, k_interpolation_range, potential_reconstruction, reflection_calculation, constraint):
         self._transform = transform
         self._rec = potential_reconstruction
@@ -342,26 +392,54 @@ class ReflectivityAmplitudeInterpolation(object):
         self.reflcalc = reflection_calculation
 
     def set_hook(self, hook):
+        """
+        :param hook: Must be a callable function, accepting this class as its only parameter.
+        :return: None
+        """
         self._hook = hook
+
+    @staticmethod
+    def _example_constrain(potential, x_space):
+        """
+        Constraints the potential.
+
+        :param potential: This is a reconstructed potential, callable. An instance of scipy.interpolate.interp1d
+        :param x_space: a range object (numpy.linspace probably) This is the values at which V will be evaluated
+        :return: instance of scipy.interpolate.interp1d or any callable function on x_space
+        """
+
+        data = potential(x_space)
+        # here, you can constrain the potential as you like ...
+        # data[(x_space >= 670)] = 0e-6
+        # data[(x_space > 270) & (x_space < 295)] = 4.77e-6
+
+        # Return a callable function
+        return scipy.interpolate.interp1d(x_space, data, fill_value=(0, 0), bounds_error=False)
 
     def interpolate(self, max_iterations, tolerance=1e-8):
         for self.iteration in range(1, max_iterations + 1):
+
             benchmark_start()
             self.potential = self._rec.reconstruct(self._transform)
             self.potential = self._constraint(self.potential, self._rec._xspace)
             benchmark_stop("Reconstructed Potential: {}")
 
             benchmark_start()
-            # Use the new reflection coefficient for small k-values and re-do the inversion ...
+
+            # Calculate the reflectivity amplitude for the potential
             self.reflcalc.set_potential(self.potential)
             self.reflectivity = self.reflcalc.refl(2 * self._range)
+
+            # Update the reflectivity amplitude for the given range.
             diff = self._transform.update(self._range, self.reflectivity)
             benchmark_stop("Updated amplitudes: {}")
 
+            # The stopping criteria, max |R_k - R_{k-1} | < eps
             if diff < tolerance or self.iteration == max_iterations:
                 # set this before _hook, so that the hook knows its the last iteration
                 self.is_last_iteration = True
 
+            # This now calls the hook and the calling program can now update graphs and do something.
             if self._hook is not None:
                 self._hook(self)
 

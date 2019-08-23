@@ -6,6 +6,20 @@ from dinv.glm import PotentialReconstruction, ReflectionCalculation
 
 
 class BornApproximationPotentialReconstruction(PotentialReconstruction):
+    """
+    The class reconstructs a potential based on a given fourier transform (only in the Born-Approximation)
+
+    This is supposed to be the "inverse" operation to BornApproximationReflectionCalculation. Hence, the computation
+    is done simply by evaluating:
+
+    R(k) being the reflection amplitude, then:
+        V(x) = i/2pi \int_{R} k R(k) e^{-ikx} dk
+
+    Note that we use it slightly different,  by observing that this can be expressed in terms of a derivative:
+        V(x) = - 1/2pi d/dx \int_{R} R(k) e^{-ikx} dk = - d/dx F[R](x)
+
+    """
+
     def reconstruct(self, fourier_transform):
         # assert isinstance(fourier_transform, GeneralFourierTransform)
 
@@ -29,6 +43,11 @@ class BornApproximationPotentialReconstruction(PotentialReconstruction):
 
 
 class BornApproximationReflectionCalculation(ReflectionCalculation):
+    """
+    This calculates the reflection amplitude using a potential.
+
+    The calculation is simply a fourier transform. Then we divide by ik.
+    """
 
     def __init__(self, potential_function, z_min, z_max, dz):
         super(BornApproximationReflectionCalculation, self).__init__(potential_function, z_min, z_max, dz)

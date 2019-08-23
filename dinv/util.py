@@ -5,6 +5,9 @@ global _bm_before, _bm_after, _debug
 _bm_before = 0
 _bm_after = 0
 
+"""
+Some utility function for benchmarking. Only active when _debug is set to True.
+"""
 try:
     if _debug is False:
         _debug = False
