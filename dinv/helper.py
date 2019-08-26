@@ -136,6 +136,8 @@ class TestRun(object):
         self.plot_potential = True
         # Plot the reflectivity amplitude?
         self.plot_phase = False
+        # Plot the phase as: arg(r)
+        self.plot_phase_angle = False
         # Plot the reflectivity?
         self.plot_reflectivity = False
         # Plot not every iteration, but every n-th
@@ -145,6 +147,8 @@ class TestRun(object):
         # Store the results into this given path. If None, do not save to file. Will only store every n-th iteration
         self.store_path = None
 
+        self.ideal_potential = None
+        self.file = None
         # Load potential from a file or accept a given potential function
         if isinstance(file_or_potential, str):
             self.file = file_or_potential
@@ -202,7 +206,11 @@ class TestRun(object):
             self.legends.append("Reconstructed SLD (exact)")
 
         if self.plot_phase:
-            pylab.plot(self.k_space, (self.reflectivity.real * self.k_space ** 2))
+            if self.plot_phase_angle:
+                pylab.plot(self.k_space, numpy.angle(self.reflectivity))
+            else:
+                pylab.plot(self.k_space, (self.reflectivity.real * self.k_space ** 2))
+
             self.store_data(zip(self.k_space, self.reflectivity.real, self.reflectivity.imag,
                                 self.reflectivity.real * self.k_space ** 2, self.reflectivity.imag * self.k_space ** 2),
                             'phase_exact', 'phase')
@@ -244,7 +252,13 @@ class TestRun(object):
                 self.store_data(
                     zip(k_subspace, refl.real, refl.imag, refl.real * k_subspace ** 2, refl.imag * k_subspace ** 2),
                     'phase_it_{}'.format(iteration), 'phase')
-                pylab.plot(k_subspace, interpolated_reflectivity * k_subspace ** 2, '.')
+
+                if self.plot_phase_angle:
+                    refl = interpolator.reflcalc.refl(2 * self.k_space)
+                    pylab.plot(self.k_space, numpy.angle(refl))
+                else:
+                    # That's just the real part of the reflectivity amplitude
+                    pylab.plot(k_subspace, interpolated_reflectivity * k_subspace ** 2, '.')
 
             if self.plot_reflectivity:
                 R = interpolator.reflcalc.refl(2 * self.k_space)

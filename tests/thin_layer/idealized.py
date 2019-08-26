@@ -17,34 +17,23 @@ def constrain(potential, x_space):
     return interpolation
 
 
-q_test_space = list(map(lambda x: round(x, 8), numpy.linspace(0.01, 0.02, 21)))
-q_test_space = 0.0005 * numpy.array(range(1, 25))
+test = TestRun("profile.dat")
 
-for q in q_test_space:
-    test = TestRun("profile.dat")
+test.cutoff = 0.005
+test.noise = 0
+test.iterations = 1000
+test.tolerance = 1e-8
+test.offset = 10
+test.thickness = 160
+test.precision = 4
+test.pot_cutoff = 2
+test.plot_every_nth = 100
+test.q_max = 5
+#test.store_path = 'store/test/kc_250/' + q_as_string + '/'
 
-    q_as_string = str(q).replace(".", 'd')
+test.plot_potential = False
+test.plot_phase = True
+test.plot_phase_angle = True
+test.plot_reflectivity = False
 
-    test.cutoff = q
-    test.noise = 0
-    test.iterations = 1000
-    test.tolerance = 1e-8
-    test.offset = 10
-    test.thickness = 160
-    test.precision = 2
-    test.pot_cutoff = 2
-    test.plot_every_nth = 10
-    test.q_max = 0.25
-    test.store_path = 'store/test/kc_250/' + q_as_string + '/'
-
-    test.show_plot = True
-    test.plot_potential = True
-    test.plot_phase = False
-    test.plot_reflectivity = False
-
-    try:
-        os.mkdir(os.getcwd() + "/" + test.store_path)
-    except:
-        pass
-
-    test.run(constrain)
+test.run(constrain)
