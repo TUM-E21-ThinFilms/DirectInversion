@@ -143,8 +143,8 @@ class FourierTransform(object):
     def __call__(self, *args, **kwargs):
         w = args[0] + self._offset
 
-        if args[0] <= 0:
-            return 0.0
+        #if args[0] <= 0:
+        #    return 0.0
 
         if not w in self._cache:
             self._cache[w] = self.method(w)

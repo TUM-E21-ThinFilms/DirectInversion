@@ -214,6 +214,7 @@ class TestRun(object):
             self.store_data(zip(self.k_space, self.reflectivity.real, self.reflectivity.imag,
                                 self.reflectivity.real * self.k_space ** 2, self.reflectivity.imag * self.k_space ** 2),
                             'phase_exact', 'phase')
+
             self.legends.append("Exact reflectivity amplitude")
 
         if self.plot_reflectivity:
@@ -249,13 +250,17 @@ class TestRun(object):
             if self.plot_phase:
                 k_subspace = self.k_space[0:self.start_end[1]]
                 refl = interpolator.reflectivity
+
                 self.store_data(
                     zip(k_subspace, refl.real, refl.imag, refl.real * k_subspace ** 2, refl.imag * k_subspace ** 2),
                     'phase_it_{}'.format(iteration), 'phase')
 
                 if self.plot_phase_angle:
-                    refl = interpolator.reflcalc.refl(2 * self.k_space)
-                    pylab.plot(self.k_space, numpy.angle(refl))
+                    # refl = interpolator.reflcalc.refl(2 * self.k_space)
+                    qmax = 1.0
+                    refl = interpolator.reflcalc.refl(
+                        2 * numpy.linspace(0, qmax / 2, int(self.q_precision * qmax * 1000) + 1))
+                    pylab.plot(numpy.linspace(0, qmax / 2, int(self.q_precision * qmax * 1000) + 1), numpy.angle(refl))
                 else:
                     # That's just the real part of the reflectivity amplitude
                     pylab.plot(k_subspace, interpolated_reflectivity * k_subspace ** 2, '.')
@@ -300,6 +305,8 @@ class TestRun(object):
         # f2 has the non-changing input
         # since f2 contains much more data in general, we can save a lot of computation by caching f2 and just
         # computing f1 each time.
+
+        # self.real, self.imag contain the reflection coefficient
         f1 = FourierTransform(self.k_space[:self.start_end[1] + 1], self.real[:self.start_end[1] + 1],
                               self.imag[:self.start_end[1] + 1])
         f2 = FourierTransform(self.k_space[self.start_end[1]:], self.real[self.start_end[1]:],
@@ -312,6 +319,11 @@ class TestRun(object):
         transform = UpdateableFourierTransform(f1, f2)
         reflcalc = ReflectionCalculation(None, 0, self.thickness + self.offset, 0.1)
 
+        # TODO: change the class name
+        # Reconstruct the reflection using the fourier transform at k = k_interpolation_range (the low k range)
+        # rec is used to reconstruct the potential
+        # reflcalc is used to calculate the reflection coefficient
+        # the constrain function constrains the potential
         interpolation = ReflectivityAmplitudeInterpolation(transform, self.k_interpolation_range, rec, reflcalc,
                                                            constrain)
         interpolation.set_hook(self._plot_hook)

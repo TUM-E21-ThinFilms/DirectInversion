@@ -307,10 +307,9 @@ class ReflectionCalculation(object):
         self._rho = None
 
     def refl(self, q):
-
         from refl1d.reflectivity import reflectivity_amplitude
 
-        z_space = numpy.linspace(self._z0, self._z1, (self._z1 - self._z0) / self._dz + 1)
+        z_space = numpy.linspace(self._z0, self._z1, int((self._z1 - self._z0) / float(self._dz)) + 1)
         dz = numpy.hstack((0, numpy.diff(z_space), 0))
 
         if self._rho is None:
@@ -378,6 +377,7 @@ class ReflectivityAmplitudeInterpolation(object):
     :param constraint: A callable function to incorporate additional constraints onto the potential.
                         See _example_constraint for more info.
     """
+
     def __init__(self, transform, k_interpolation_range, potential_reconstruction, reflection_calculation, constraint):
         self._transform = transform
         self._rec = potential_reconstruction
@@ -425,11 +425,9 @@ class ReflectivityAmplitudeInterpolation(object):
             benchmark_stop("Reconstructed Potential: {}")
 
             benchmark_start()
-
             # Calculate the reflectivity amplitude for the potential
             self.reflcalc.set_potential(self.potential)
             self.reflectivity = self.reflcalc.refl(2 * self._range)
-
             # Update the reflectivity amplitude for the given range.
             diff = self._transform.update(self._range, self.reflectivity)
             benchmark_stop("Updated amplitudes: {}")
@@ -447,3 +445,17 @@ class ReflectivityAmplitudeInterpolation(object):
                 break
 
         return self.reflectivity
+
+
+class ReflectivityAmplitudeExtrapolation(object):
+    def __init__(self, correct_transform, reflectivity, k_extrapolation_range, potential_reconstruction,
+                 reflection_calculation, constraint):
+        self.transform = correct_transform
+        self.refl = reflectivity
+        self.k_range = k_extrapolation_range
+        self.rec_calc = potential_reconstruction
+        self.refl_calc = reflection_calculation
+        self.constraint = constraint
+
+    def extrapolate(self, max_iterations, tolerance=1e-8):
+        pass
