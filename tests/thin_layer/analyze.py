@@ -4,11 +4,12 @@ import numpy
 
 result = {}
 
-for subdir, dirs, files in os.walk('store/test/kc_250/'):
+for subdir, dirs, files in os.walk('store/test/K/'):
     for file in files:
         qmax = os.path.basename(subdir)
         qmax = qmax.replace('d', '.')
         qmax = int(round(float(qmax) * 10000, 3))
+        #qmax = int(float(qmax)) + 20
         #print os.path.join(subdir, file)
 
         if file.endswith('.dat'):
@@ -35,4 +36,4 @@ for i in sorted (result.keys()):
 
 print(zip(q, it))
 
-numpy.savetxt('kc_random_250.dat', numpy.array(zip(q, it), dtype=int), fmt='%i', header="q_max * 100 [1/Ang]\tmax_iteration [1]", delimiter="\t")
+numpy.savetxt('K_simulation.dat', numpy.array(zip(q, it), dtype=int), fmt='%i', header="q_max * 100 [1/Ang]\tmax_iteration [1]", delimiter="\t")

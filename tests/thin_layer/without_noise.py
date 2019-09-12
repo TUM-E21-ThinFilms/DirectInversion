@@ -17,7 +17,7 @@ def constrain(potential, x_space):
     return interpolation
 
 
-test = TestRun("profile.dat")
+test = TestRun("simulation-1-profile.dat")
 
 test.cutoff = 0.01
 test.noise = 0
@@ -25,16 +25,17 @@ test.iterations = 100
 test.tolerance = 1e-8
 test.offset = 20
 test.thickness = 180
-test.precision = 4
+test.precision = 1
 test.pot_cutoff = 2
 test.plot_every_nth = 10
-test.use_only_real_part = True
-test.q_max = 0.25
+test.use_only_real_part = False
+test.q_max = 0.2
 
+#test.start = 'exact'
 test.store_path = 'store/'
 
 test.plot_potential = True
-test.plot_phase = False
-test.plot_reflectivity = False
+test.plot_phase = True
+test.plot_reflectivity = True
 
 test.run(constrain)

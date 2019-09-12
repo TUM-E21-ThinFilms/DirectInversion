@@ -306,6 +306,9 @@ class ReflectionCalculation(object):
         self._pot = potential_function
         self._rho = None
 
+    def reflectivity(self, q_space):
+        return array([abs(self.refl(q))**2 for q in q_space])
+
     def refl(self, q):
         from refl1d.reflectivity import reflectivity_amplitude
 
@@ -429,11 +432,11 @@ class ReflectivityAmplitudeInterpolation(object):
             self.reflcalc.set_potential(self.potential)
             self.reflectivity = self.reflcalc.refl(2 * self._range)
             # Update the reflectivity amplitude for the given range.
-            diff = self._transform.update(self._range, self.reflectivity)
+            self.diff = self._transform.update(self._range, self.reflectivity)
             benchmark_stop("Updated amplitudes: {}")
 
             # The stopping criteria, max |R_k - R_{k-1} | < eps
-            if diff < tolerance or self.iteration == max_iterations:
+            if self.diff < tolerance or self.iteration == max_iterations:
                 # set this before _hook, so that the hook knows its the last iteration
                 self.is_last_iteration = True
 
@@ -441,7 +444,7 @@ class ReflectivityAmplitudeInterpolation(object):
             if self._hook is not None:
                 self._hook(self)
 
-            if diff < tolerance:
+            if self.diff < tolerance:
                 break
 
         return self.reflectivity

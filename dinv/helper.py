@@ -275,7 +275,7 @@ class TestRun(object):
         exact_real = (self.reflectivity[self.start_end[0]:self.start_end[1]]).real
         # relative error
         print(iteration, (interpolated_reflectivity - exact_real) / exact_real * 100)
-        print(sum(abs((interpolated_reflectivity - exact_real) / exact_real * 100)))
+        print(1.0/len(interpolated_reflectivity) * sum(abs((interpolated_reflectivity - exact_real) / exact_real * 100)), interpolator.diff)
 
     def store_data(self, X, filename, header=[]):
         if self.store_path is None:

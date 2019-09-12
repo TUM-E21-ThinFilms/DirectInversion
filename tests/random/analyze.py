@@ -4,7 +4,7 @@ import numpy
 
 result = {}
 
-for subdir, dirs, files in os.walk('data/test/kc'):
+for subdir, dirs, files in os.walk('store/test/kc'):
     for file in files:
         qmax = os.path.basename(subdir)
         qmax = qmax.replace('d', '.')
@@ -35,4 +35,4 @@ for i in sorted (result.keys()):
 
 print(zip(q, it))
 
-numpy.savetxt('kc_random.dat', numpy.array(zip(q, it), dtype=int), fmt='%i', header="q_max * 100 [1/Ang]\tmax_iteration [1]", delimiter="\t")
+numpy.savetxt('kc_simulation.dat', numpy.array(zip(q, it), dtype=int), fmt='%i', header="q_max * 100 [1/Ang]\tmax_iteration [1]", delimiter="\t")

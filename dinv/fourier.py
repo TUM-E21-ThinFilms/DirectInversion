@@ -28,6 +28,7 @@ class GeneralFourierTransform(object):
     :param function_support_range: Any range object (range, numpy.linspace)
     :param function: any callable function f: function_support_range -> RealNumbers/ComplexNumbers
     """
+
     def __init__(self, function_support_range, function):
         self._range = function_support_range
         self._f = function
@@ -143,8 +144,8 @@ class FourierTransform(object):
     def __call__(self, *args, **kwargs):
         w = args[0] + self._offset
 
-        #if args[0] <= 0:
-        #    return 0.0
+        if args[0] <= 0:
+            return 0.0
 
         if not w in self._cache:
             self._cache[w] = self.method(w)
@@ -208,6 +209,7 @@ class UpdateableFourierTransform(FourierTransform):
 
     F[f](x) = \int_{0}^{k} f1(w) exp(-iwx) dx +  \int_{k}^{\infty} f2(w) exp(-iwx) dx
     """
+
     def __init__(self, f1, f2):
         self._f1 = f1
         self._f2 = f2
@@ -223,3 +225,66 @@ class UpdateableFourierTransform(FourierTransform):
     def __call__(self, *args, **kwargs):
         w = args[0]
         return self._f1(w) + self._f2(w)
+
+
+class AutoCorrelation(object):
+    def __init__(self, f, support, spacing=0.1):
+        self._f = f
+        self._supp = support
+        self._diff = support[1] - support[0]
+
+        self._spacing = spacing
+        self._eval_space = numpy.linspace(support[0], support[1], self._diff * int(1.0 / spacing))
+        self._feval = array([f(x) for x in self._eval_space])
+
+    def calc(self):
+        from scipy import signal
+        space = numpy.arange(-len(self._feval) + 1, len(self._feval)) * self._spacing
+        return space, signal.fftconvolve(self._feval, self._feval[::-1], mode='full') * self._spacing
+
+    def calculate(self, tau):
+        # The integral is then just simply zero since either f(t) or f(t + tau) is zero.
+        if not (-self._diff <= tau <= self._diff):
+            return 0.0
+
+        # the autocorrelation is symmetric, hence abs is ok to use
+        shiftby = abs(int(float(tau) / self._spacing))
+
+        return scipy.integrate.trapz(self._feval[:len(self._feval) - shiftby] * self._feval[shiftby:],
+                                     dx=1.0 / int(1.0 / self._spacing))
+
+    def __call__(self, *args, **kwargs):
+        tau = args[0]
+        return self.calculate(tau)
+
+    def plot_f(self):
+        pylab.plot(self._eval_space, self._feval)
+
+    def plot_correlation(self, tau_space=None):
+        if tau_space is None:
+            tau_space = numpy.linspace(-self._diff, self._diff, self._diff * 100 + 1)
+
+        # pylab.plot(tau_space, [self.calculate(t) for t in tau_space])
+        space, autocor = self.calc()
+
+        # pylab.plot(space, autocor/np.max(autocor))
+        # Normalize: the max is attained at the autocorrelation time lag = 0
+        # This is then the center of the array.
+        pylab.plot(space, autocor / autocor[len(autocor) / 2])
+
+def smooth(f, support, spacing, sigma=1.0):
+    diff = support[1] - support[0]
+    eval_space = numpy.linspace(support[0], support[1], diff * int(1.0 / spacing))
+    feval = array([f(x) for x in eval_space])
+
+    width = numpy.arange(-5 * sigma, 5 * sigma, spacing)
+    gaussian_kernel = 1.0 / numpy.sqrt(2 * numpy.pi * sigma ** 2) * numpy.exp(-numpy.square(width / sigma) / 2.0)
+
+    conv = numpy.convolve(feval, gaussian_kernel, mode='full') * spacing
+    conv = conv# / numpy.max(conv)
+
+    space = numpy.arange(-len(conv) / 2, len(conv) / 2) * spacing
+    return scipy.interpolate.interp1d(space, conv, bounds_error=False, fill_value=0)
+
+
+
