@@ -59,8 +59,8 @@ def f(x):
 
     return 0.0
 
-support = numpy.linspace(-250, 500, 5000)
-V = smooth(f, (-200, 200), 1e-2, sigma=3)
+support = numpy.linspace(-300, 500, 5000)
+V = smooth(f, (-20, 200), 1e-2, sigma=3)
 F = GeneralFourierTransform(support, V)
 w_space = numpy.linspace(-5, 5, 5000)
 
@@ -69,24 +69,25 @@ import cmath, math
 numpy.random.seed(2)
 
 def sgn(x):
-    return cmath.exp(1j * 1/x*math.sin(3.0*x)**2 * math.pi)
+    #return cmath.exp(1j * 2.0/x*(math.sin(3.0*x)**2)**2)
+    return cmath.exp(1j * (2.0/x*(math.sin(4.0*x)**2)**2 + x + x**3))
 
 F2 = GeneralFourierTransform(w_space, scipy.interpolate.interp1d(w_space, [sgn(w)*F.fourier(w) for w in w_space]))
 V2 = scipy.interpolate.interp1d(support, [F2.fourier_inverse(x).real for x in support], bounds_error=False, fill_value=0)
 
-pylab.plot(support, V(support).real)
-pylab.plot(support, shift_potential(V2, 25)(support))
+pylab.plot(support, V(support))
+pylab.plot(support, V2(support))
 #pylab.plot(support, V2(support).imag)
 pylab.show()
 
-"""
+
 F3 = GeneralFourierTransform(support, V2)
 pylab.plot(w_space[len(w_space)/2:], abs(array([1/w*F.fourier(w) for w in w_space if w > 0]))**2)
 pylab.plot(w_space[len(w_space)/2:], abs(array([1/w*F3.fourier(w) for w in w_space if w > 0]))**2)
 pylab.yscale('log')
 #pylab.ylim(-1, 5)
 pylab.show()
-"""
+
 
 reflcalc = ReflectionCalculation(None, -250, 300, 0.05)
 
@@ -102,11 +103,10 @@ reflcalc.set_potential(scale(V2))
 reflcalc.plot_refl(numpy.linspace(0, 2, 1000))
 pylab.show()
 
-
 q_space = numpy.linspace(0, 2, 1000)
 
 numpy.savetxt('initial.dat', zip(support, scale(V)(support)))
-numpy.savetxt('equivalent.dat', zip(support, shift_potential(scale(V2), 25)(support)))
+numpy.savetxt('equivalent.dat', zip(support, scale(V2)(support)))
 reflcalc.set_potential(scale(V))
 numpy.savetxt('reflectivtiy_initial.dat', zip(q_space, reflcalc.reflectivity(q_space)))
 reflcalc.set_potential(scale(V2))
