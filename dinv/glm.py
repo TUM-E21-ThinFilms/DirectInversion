@@ -419,7 +419,8 @@ class ReflectivityAmplitudeInterpolation(object):
 
             benchmark_start()
             self.potential = self._rec.reconstruct(self._transform)
-            self.potential = self._constraint(self.potential, self._rec._xspace)
+            if self._constraint is not None:
+                self.potential = self._constraint(self.potential, self._rec._xspace)
             benchmark_stop("Reconstructed Potential: {}")
 
             benchmark_start()

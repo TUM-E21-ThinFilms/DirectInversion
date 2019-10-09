@@ -15,19 +15,24 @@ def constrain(potential, x_space):
     interpolation = scipy.interpolate.interp1d(x_space, data, fill_value=(0, 0), bounds_error=False)
     return interpolation
 
-rng = numpy.linspace(0.0, 0.0125, 0.0125 * 2000 + 1)
-rng = list(map(lambda x: round(x, 5), rng))
-print(rng)
-#exit(1)
+K_rng = numpy.arange(0.05, 5.05, 0.05)
+kc_rng = numpy.arange(0, 1.30, 0.05001) * 1e-2
 
-for var in rng:
+
+rng = kc_rng
+rng = list(map(lambda x: round(x, 6), rng))
+print(rng)
+
+#exit(1)
+def simulate(var):
+
     print(var)
     print("\n\n\n")
 
     test = TestRun("simulation-1-profile.dat")
     q_as_string = str(var).replace(".", 'd')
 
-    test.cutoff = var
+    test.cutoff = var #0.0085
     test.noise = 0
     test.iterations = 10000
     test.tolerance = 1e-8
@@ -38,21 +43,40 @@ for var in rng:
     test.use_only_real_part = False
     test.q_max = 0.5
     test.plot_every_nth = 100
-    test.store_path = 'store/test/kc/' + q_as_string + "/"
+    # test.store_path = 'store/test/kc/' + q_as_string + "/"
     test.q_precision = 1
 
     test.start = 0
 
-    test.plot_potential = True
+    test.plot_potential = False
     test.plot_phase = False
     test.plot_reflectivity = False
     test.show_plot = False
-
+    test.diagnostic_session = True
+    """
 
     try:
         os.mkdir(os.getcwd() + "/" + test.store_path)
     except:
         pass
+    """
 
 
-    test.run(constrain)
+    solution = test.run(constrain)
+    #print(solution)
+    print(test.diagnosis()['iteration'][-1])
+    return (var, test.diagnosis())
+
+    #result.append((var, test.diagnosis()))
+
+result = []
+for var in rng:
+    result.append(simulate(var))
+
+for res in result:
+    var = res[0]
+    data = res[1]
+
+    diff = data['iteration'][-1][1]
+    rel_err = data['iteration'][-1][2]
+    print(var, data['iteration'][-1])

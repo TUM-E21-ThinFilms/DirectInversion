@@ -95,8 +95,8 @@ class TestRun(object):
         self.start = [0]
 
         # Sets R(k) = self.start for k < cutoff
-        # 0.1 is approximately the critical edge for Si
-        self.cutoff = 0.1
+        # 0.01 is approximately the critical edge for Si
+        self.cutoff = 0.01
 
         # adds gaussian noise to R(q)
         self.noise = 5e-2
@@ -153,11 +153,23 @@ class TestRun(object):
         else:
             self.ideal_potential = file_or_potential
 
+        # if set to true, the script will gather diagnostic information
+        # and store it into _diagnostics, which can be accessed via
+        # self.diagnosis()
+        self.diagnostic_session = False
+
+        # Diagnosis object, stores some useful information
+        self._diagnosis = {
+            'iteration': [],
+            'last_iteration': 0
+        }
+
     def setup(self):
         self.legends = []
 
         self.plot_potential_space = numpy.linspace(0, self.thickness + self.offset,
-                                                   10 * (self.thickness + self.offset) + 1)
+                                    10 * self.precision * (self.thickness + self.offset) + 1)
+
         self.k_space = numpy.linspace(0, self.q_max / 2.0,
                                       int(self.q_precision * self.q_max * 1000) + 1)
 
@@ -168,6 +180,7 @@ class TestRun(object):
             self.ideal_potential = load_potential(self.file)
 
         self.ideal_potential = shift_potential(self.ideal_potential, self.offset)
+
         self.reflcalc = ReflectionCalculation(self.ideal_potential, 0,
                                               self.thickness + self.offset, 0.1)
 
@@ -175,6 +188,9 @@ class TestRun(object):
 
         if self.start == 'exact':
             self.start = self.reflectivity[self.start_end[0]:self.start_end[1]]
+
+        if self.start is None:
+            self.start = 0
 
         self.start = array(self.start)
 
@@ -196,13 +212,11 @@ class TestRun(object):
 
             self.reference_potential = potential
 
-            self.store_data(zip(self.plot_potential_space,
-                                self.ideal_potential(self.plot_potential_space)),
-                            'pot_exact', 'potential')
-            self.store_data(
-                zip(self.plot_potential_space, potential(self.plot_potential_space)),
-                'pot_ideal',
-                'potential')
+            self.store_data(zip(self.plot_potential_space, self.ideal_potential(
+                self.plot_potential_space)),'pot_exact', 'potential')
+
+            self.store_data(zip(self.plot_potential_space, potential(
+                self.plot_potential_space)), 'pot_ideal', 'potential')
 
             pylab.plot(self.plot_potential_space,
                        self.ideal_potential(self.plot_potential_space))
@@ -242,6 +256,20 @@ class TestRun(object):
             self.legends.append('Exact Reflectivity (w/o noise)')
             self.legends.append('Exact Reflectivity (w/ noise)')
             self.legends.append('Ideal Reflectivity')
+
+    def diagnosis(self):
+        return self._diagnosis
+
+    def _diagnostic_hook(self, interpolator):
+        assert isinstance(interpolator, ReflectivityAmplitudeInterpolation)
+
+        refl = interpolator.reflectivity
+        exact = (self.reflectivity[self.start_end[0]:self.start_end[1]])
+        # total relative error in percentage
+        relative_error = 1.0 / len(refl) * sum(abs((refl - exact) / exact * 100))
+
+        self._diagnosis['iteration'].append((interpolator.iteration, interpolator.diff, relative_error))
+        self._diagnosis['last_iteration'] = interpolator.iteration
 
     def _plot_hook(self, interpolator):
         iteration = interpolator.iteration
@@ -291,8 +319,9 @@ class TestRun(object):
         exact_real = (self.reflectivity[self.start_end[0]:self.start_end[1]]).real
         # relative error
         print(iteration, (interpolated_reflectivity - exact_real) / exact_real * 100)
-        print(1.0 / len(interpolated_reflectivity) * sum(
-            abs((interpolated_reflectivity - exact_real) / exact_real * 100)),
+        refl = interpolator.reflectivity
+        exact = (self.reflectivity[self.start_end[0]:self.start_end[1]])
+        print(1.0 / len(refl) * sum(abs((refl - exact) / exact * 100)),
               interpolator.diff)
 
     def store_data(self, X, filename, header=[]):
@@ -349,15 +378,16 @@ class TestRun(object):
         # the constrain function constrains the potential
         interpolation = ReflectivityAmplitudeInterpolation(transform,
                                                            self.k_interpolation_range, rec,
-                                                           reflcalc,
-                                                           constrain)
+                                                           reflcalc, constrain)
+
         interpolation.set_hook(self._plot_hook)
+        if self.diagnostic_session:
+            interpolation.set_hook(self._diagnostic_hook)
 
         solution = interpolation.interpolate(self.iterations, tolerance=self.tolerance)
-
-        print("Algorithm terminated with solution:")
-        print(list(solution))
 
         pylab.legend(self.legends)
         if self.show_plot:
             pylab.show()
+
+        return solution
