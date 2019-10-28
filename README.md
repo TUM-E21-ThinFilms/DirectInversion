@@ -1,4 +1,4 @@
-# DirectInversion
+# Direct Inversion
 This python library computes from the reflection coefficient the 
 corresponding scattering potential, assuming no absorption and no 
 bound states. The algorithm is a straight-forward discretization of the
@@ -20,7 +20,7 @@ q, RReal, RImag = numpy.loadtxt("reflection.dat").T
 From the data, calculate the Fourier transform, and reconstruct the data
 using the PotentialReconstruction class. The parameter precision 
 determines the discretization step, the higher the smaller the step. 
-The shift parameter shifts the potential to the right, usefull for 
+The shift parameter shifts the potential to the right, useful for 
 potentials with rough surfaces at the air interface. 
 
 ```python
