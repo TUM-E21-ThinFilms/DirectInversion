@@ -38,7 +38,7 @@ potential = reconstruction.reconstruct(fourier)
 ``` 
 
 The reconstructed potential is a callable function (scipy interpolation 
-object). For a simple plott, simply use
+object). For a simple plot, simply use
 
 ```python
 import pylab
