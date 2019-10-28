@@ -6,6 +6,8 @@ Gelfand-Levitan-Marchenko integral equation.
 
 ![GLM integral equation](https://quicklatex.com/cache3/00/ql_0153fa716f34233471dfab251d0b0400_l3.png)
 
+where the function g is the fourier transform of the reflection coefficient.
+
 # Usage
 First load the reflection data. Either the real part or the imaginary
 part of the reflection coefficient is required. Of course, also both can
