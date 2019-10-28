@@ -63,3 +63,20 @@ fourier.method = fourier.cosine_transform
 # Use both
 fourier.method = fourier.fourier_transform
 ```
+
+## Retrieval of low frequencies in the reflection coefficient
+If the reflection coefficient cannot be measured for low q values, it may
+be possible to calculate them using a fixed-point iteration. 
+```python
+from dinv.glm import ReflectivityAmplitudeInterpolation, ReflectionCalculation
+
+# The range to interpolate
+k_range = numpy.linspace(0, 0.01, 10)
+
+reflection = ReflectionCalculation(None, 0, 370)
+constraint = ReflectivityAmplitudeInterpolation._example_constrain
+
+interpolation = ReflectivityAmplitudeInterpolation(fourier, k_range, reconstruction, reflection, constraint)
+reflection = interpolation.interpolate(200)
+```
+The variable reflection contains the reflection coeffcient only for k in k_range.

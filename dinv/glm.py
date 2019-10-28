@@ -355,7 +355,7 @@ class ReflectivityAmplitudeInterpolation(object):
 
     How does it work?
     Take this R(k), compute a potential from this (this potential is totally off),
-    compute a reflectivity from this potential, and then just take the new reflectivity
+    compute the reflection from this potential, and then just take the new reflection
     and update R(k) for all 0 <= k <= k_c and repeat.
 
     In each step of iteration, a call to hook (see set_hook) is made. The calling program
