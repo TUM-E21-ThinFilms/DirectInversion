@@ -3,7 +3,8 @@ This python library computes from the reflection coefficient the
 corresponding scattering potential, assuming no absorption and no 
 bound states. The algorithm is a straight-forward discretization of the
 Gelfand-Levitan-Marchenko integral equation.
- ![GLM integral equation](https://quicklatex.com/cache3/00/ql_0153fa716f34233471dfab251d0b0400_l3.png)
+
+![GLM integral equation](https://quicklatex.com/cache3/00/ql_0153fa716f34233471dfab251d0b0400_l3.png)
 
 # Usage
 First load the reflection data. Either the real part or the imaginary
