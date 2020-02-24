@@ -85,10 +85,9 @@ class GLMSolver(object):
         A = numpy.zeros((N + 1, N + 1))
 
         benchmark_start()
-        cache = [eps * g(eps * i) for i in range(0, N + 1)]
+        cache = array([eps * g(eps * i) for i in range(0, N + 1)])
         benchmark_stop("Calculating Fourier Transform: {}")
-
-        G = 1 / eps * array(cache)
+        G = 1 / eps * cache
 
         """
             This is a simple discretization of the GLM integral equation:
@@ -283,16 +282,24 @@ class ReflectionCalculation(object):
         k = args[0]
         return self.refl(2 * k)
 
-    def plot_potential(self, style='--', label=''):
+    def plot_potential(self, style='--', label='', show=False):
         z_space = numpy.linspace(self._z0, self._z1, (self._z1 - self._z0) / self._dz + 1)
         pylab.plot(z_space, self._pot(z_space), style, label=label)
+        pylab.xlabel('z [A]')
+        pylab.ylabel('V(z) (SLD) [A^-2]')
+        if show:
+            pylab.show()
 
     def set_potential(self, potential_function):
         self._pot = potential_function
         self._rho = None
 
     def reflectivity(self, q_space):
-        return array([abs(self.refl(q)) ** 2 for q in q_space])
+        return abs(self.refl(q_space)**2)
+        #return array([abs(self.refl(q)) ** 2 for q in q_space])
+
+    def reflection(self, k_range):
+        return self.refl(2*k_range)
 
     def refl(self, q):
         from refl1d.reflectivity import reflectivity_amplitude
@@ -310,39 +317,44 @@ class ReflectionCalculation(object):
         R = reflectivity_amplitude(kz=q / 2, depth=dz, rho=rho)
 
         # TODO: fix the wrong sign. Note, the 'wrong' sign is actually correct. the sign
-        #  should be changed
-        # in the reflectivity calculation module. but not my problem ...
+        #  should be changed in the reflectivity calculation module.
         R.imag = -R.imag
 
         return R
 
-    def plot_ampl(self, q_space, scale=True, style='-'):
+    def plot_ampl(self, q_space, scale=True, style='-', show=False):
         if scale:
-            refl = [self.refl(q) * q ** 2 for q in q_space]
+            refl = array([self.refl(q) * q ** 2 for q in q_space])
         else:
-            refl = [self.refl(q) for q in q_space]
+            refl = array([self.refl(q) for q in q_space])
 
-        Rreal = array([r.real for r in refl])
 
-        Rimag = array([r.imag for r in refl])
+        pylab.plot(q_space, refl.real, style, label='Re R')
+        pylab.plot(q_space, refl.imag, style, label='Im R')
 
-        pylab.plot(q_space, Rreal, style)
-        pylab.plot(q_space, Rimag, style)
+        pylab.xlabel("q [A^-1]")
+        pylab.ylabel("q^2 * R [A^-2]")
 
-        pylab.legend(["Real R", "Imag R"])
-        pylab.xlabel("q")
-        pylab.ylabel("q^2 * R")
+        pylab.legend()
 
-    def plot_refl(self, q_space):
+        if show:
+            pylab.show()
 
-        refl = [abs(self.refl(q)) ** 2 for q in q_space]
+    def plot_reflection(self, q_space, scale=True, style='-', show=False):
+        self.plot_ampl(q_space, scale, style, show)
+
+    def plot_refl(self, q_space, show=False):
+
+        refl = abs(self.reflection(q_space / 2)**2)
 
         pylab.plot(q_space, refl)
 
-        pylab.legend()
         pylab.xlabel("q_space")
         pylab.ylabel("log R")
         pylab.yscale("log")
+
+        if show:
+            pylab.show()
 
 
 class ReflectivityAmplitudeInterpolation(object):
@@ -427,6 +439,7 @@ class ReflectivityAmplitudeInterpolation(object):
             # Calculate the reflectivity amplitude for the potential
             self.reflcalc.set_potential(self.potential)
             self.reflectivity = self.reflcalc.refl(2 * self._range)
+
             # Update the reflectivity amplitude for the given range.
             self.diff = self._transform.update(self._range, self.reflectivity)
             benchmark_stop("Updated amplitudes: {}")
@@ -451,6 +464,7 @@ class ReflectivityAmplitudeExtrapolation(object):
     def __init__(self, correct_transform, reflectivity, k_extrapolation_range,
                  potential_reconstruction,
                  reflection_calculation, constraint):
+
         self.transform = correct_transform
         self.refl = reflectivity
         self.k_range = k_extrapolation_range

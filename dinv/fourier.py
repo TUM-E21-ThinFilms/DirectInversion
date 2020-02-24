@@ -4,7 +4,12 @@ import pylab
 import scipy.integrate
 import scipy.interpolate
 
+from scipy.integrate import trapz, cumtrapz, quad
 from numpy import array, pi
+
+from typing import List
+
+from dinv.function import Function, invfourier_matrix
 
 
 class GeneralFourierTransform(object):
@@ -28,9 +33,11 @@ class GeneralFourierTransform(object):
     :param function_support_range: Any range object (range, numpy.linspace)
     :param function: any callable function f: function_support_range ->
     RealNumbers/ComplexNumbers
+    :param inverse=False: boolean indicating whether to compute the fourier
+    or inverse fourier transform
     """
 
-    def __init__(self, function_support_range, function):
+    def __init__(self, function_support_range, function, inverse=False):
         self._range = function_support_range
         self._f = function
 
@@ -38,10 +45,25 @@ class GeneralFourierTransform(object):
 
         self._feval = [self._f(x) for x in self._range]
         self._cache = {}
-        self.method = self.fourier
+        if inverse:
+            self.method = self.fourier_inverse
+        else:
+            self.method = self.fourier
+
+    @classmethod
+    def from_function(cls, function: Function, inverse=False):
+        return cls(function.get_domain(), function.get_function(), inverse=inverse)
 
     def reset(self):
         self._cache = {}
+
+    def plot(self, w_space):
+        data = numpy.array([self(w) for w in w_space])
+        pylab.plot(w_space, data.real, label='real')
+        pylab.plot(w_space, data.imag, label='imag')
+
+    def evaluate(self, w_space):
+        return numpy.array([self.method(w) for w in w_space])
 
     def __call__(self, *args, **kwargs):
         w = args[0]
@@ -64,12 +86,10 @@ class GeneralFourierTransform(object):
         return numpy.max(abs(old - values))
 
     def fourier(self, w):
-        return scipy.integrate.trapz(self._feval * numpy.exp(-1j * w * self._range),
-                                     dx=self._spacing)
+        return trapz(self._feval * numpy.exp(- 1j * w * self._range), dx=self._spacing)
 
     def fourier_inverse(self, w):
-        return 1 / (2 * pi) * scipy.integrate.trapz(
-            self._feval * numpy.exp(1j * w * self._range), dx=self._spacing)
+        return 1 / (2 * pi) * trapz(self._feval * numpy.exp(1j * w * self._range), dx=self._spacing)
 
 
 class FourierTransform(object):
@@ -182,19 +202,15 @@ class FourierTransform(object):
 
     def fourier_transform(self, w):
         # Note here, since k_space is positive (see 2)), the factor reduces to 2/2pi.
-        return 1 / pi * scipy.integrate.trapz(
-            (self._r + 1j * self._i) * numpy.exp(-1j * self._k * w),
-            dx=self._k_spacing).real
+        return 1 / pi * trapz((self._r + 1j * self._i) * numpy.exp(-1j * self._k * w), dx=self._k_spacing).real
 
     def cosine_transform(self, w):
         # And again, since we have to multiply the factor with 2 again, hence 2/pi is the
         # result
-        return 2 / pi * scipy.integrate.trapz(numpy.cos(self._k * w) * self._r,
-                                              dx=self._k_spacing)
+        return 2 / pi * trapz(numpy.cos(self._k * w) * self._r, dx=self._k_spacing)
 
     def sine_transform(self, w):
-        return 2 / pi * scipy.integrate.trapz(numpy.sin(self._k * w) * self._i,
-                                              dx=self._k_spacing)
+        return 2 / pi * trapz(numpy.sin(self._k * w) * self._i, dx=self._k_spacing)
 
     def plot(self, w_range, show=True, offset=0):
         pylab.plot(w_range, [self.method(w) + offset for w in w_range])
@@ -270,9 +286,8 @@ class AutoCorrelation(object):
         # the autocorrelation is symmetric, hence abs is ok to use
         shiftby = abs(int(float(tau) / self._spacing))
 
-        return scipy.integrate.trapz(
-            self._feval[:len(self._feval) - shiftby] * self._feval[shiftby:],
-            dx=1.0 / int(1.0 / self._spacing))
+        return trapz(self._feval[:len(self._feval) - shiftby] * self._feval[shiftby:],
+                     dx=1.0 / int(1.0 / self._spacing))
 
     def __call__(self, *args, **kwargs):
         tau = args[0]
@@ -295,7 +310,7 @@ class AutoCorrelation(object):
 
 
 def smooth(f, support, spacing, sigma=1.0):
-    diff = support[1] - support[0]
+    diff = int(support[1] - support[0])
     eval_space = numpy.linspace(support[0], support[1], diff * int(1.0 / spacing))
     feval = array([f(x) for x in eval_space])
 
@@ -303,8 +318,31 @@ def smooth(f, support, spacing, sigma=1.0):
     gaussian_kernel = 1.0 / numpy.sqrt(2 * numpy.pi * sigma ** 2) * numpy.exp(
         -numpy.square(width / sigma) / 2.0)
 
-    conv = numpy.convolve(feval, gaussian_kernel, mode='full') * spacing
-    conv = conv  # / numpy.max(conv)
+    conv = numpy.convolve(feval, gaussian_kernel, mode='same') * spacing
+    return scipy.interpolate.interp1d(eval_space, conv, bounds_error=False, fill_value=0)
 
-    space = numpy.arange(-len(conv) / 2, len(conv) / 2) * spacing
-    return scipy.interpolate.interp1d(space, conv, bounds_error=False, fill_value=0)
+
+class FourierExtrapolation(object):
+    def __init__(self, fourier: Function, constraint: Function):
+        self._f = fourier
+        self._constrain = constraint
+
+    def extrapolate(self, w_spaces: List[numpy.ndarray], constraint_space=None):
+        if constraint_space is None:
+            constraint_space = self._constrain.get_domain()
+
+        if len(w_spaces) == 0:
+            raise RuntimeError("No fourier frequency space given")
+
+        mfull = numpy.concatenate([invfourier_matrix(w_space, constraint_space) for w_space in w_spaces], axis=1)
+
+        #actual = numpy.dot(invfourier_matrix(self._f.get_domain(), constraint_space), self._f(self._f.get_domain()))
+        from dinv.function import InverseFourierTransform
+        actual = InverseFourierTransform.from_function(constraint_space, self._f)(constraint_space)
+        target = self._constrain(constraint_space)
+
+        b = target - actual
+
+        f_extrapolate, residuals, rank, s = numpy.linalg.lstsq(mfull, b, rcond=1e-10)
+
+        return f_extrapolate

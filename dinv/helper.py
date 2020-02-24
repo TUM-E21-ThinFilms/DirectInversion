@@ -6,9 +6,9 @@ from numpy import array
 from dinv.glm import ReflectivityAmplitudeInterpolation, ReflectionCalculation, \
     PotentialReconstruction
 from dinv.fourier import UpdateableFourierTransform, FourierTransform
+from dinv.function import Function
 
-
-def load_potential(file):
+def load_potential(file, as_function=False):
     """
     Loads a generic potential created by refl1d from a file.
     The first column are the x-values
@@ -20,8 +20,12 @@ def load_potential(file):
     potential = numpy.loadtxt(file).T
     potential[1] = 1e-6 * numpy.flip(potential[1])
     # potential[1] *= 1e-6
-    return scipy.interpolate.interp1d(potential[0], potential[1], fill_value=(0, 0),
+    fun = scipy.interpolate.interp1d(potential[0], potential[1], fill_value=(0, 0),
                                       bounds_error=False, kind='linear')
+    if as_function:
+        return Function(potential[0], fun)
+    else:
+        return fun
 
 
 def load_potential_bumps(file, spin_state='up'):
@@ -35,7 +39,7 @@ def load_potential_bumps(file, spin_state='up'):
     """
     potential = numpy.loadtxt(file).T
 
-    if spin_state is 'up' or spin_state == '+':
+    if spin_state == 'up' or spin_state == '+':
         sgn = 1
     else:
         sgn = -1
@@ -52,7 +56,6 @@ def load_potential_bumps(file, spin_state='up'):
 
     return scipy.interpolate.interp1d(z, V, fill_value=(0, 0), bounds_error=False,
                                       kind='linear')
-
 
 def shift_potential(potential, offset):
     """
@@ -137,6 +140,8 @@ class TestRun(object):
         self.plot_phase_angle = False
         # Plot the reflectivity?
         self.plot_reflectivity = False
+        # Plot the reflection
+        self.plot_reflection = False
         # Plot not every iteration, but every n-th
         self.plot_every_nth = 10
         # Plot anything at all
@@ -168,7 +173,7 @@ class TestRun(object):
         self.legends = []
 
         self.plot_potential_space = numpy.linspace(0, self.thickness + self.offset,
-                                    10 * self.precision * (self.thickness + self.offset) + 1)
+                                                   10 * self.precision * (self.thickness + self.offset) + 1)
 
         self.k_space = numpy.linspace(0, self.q_max / 2.0,
                                       int(self.q_precision * self.q_max * 1000) + 1)
@@ -199,11 +204,9 @@ class TestRun(object):
 
     def _plot_exact(self):
 
-        rec = PotentialReconstruction(self.thickness + self.offset, self.precision,
-                                      cutoff=self.pot_cutoff)
+        rec = PotentialReconstruction(self.thickness + self.offset, self.precision, cutoff=self.pot_cutoff)
 
-        transform = FourierTransform(self.k_space, self.reflectivity.real,
-                                     self.reflectivity.imag)
+        transform = FourierTransform(self.k_space, self.reflectivity.real, self.reflectivity.imag)
         potential = rec.reconstruct(transform)
 
         if self.plot_potential:
@@ -212,11 +215,11 @@ class TestRun(object):
 
             self.reference_potential = potential
 
-            self.store_data(zip(self.plot_potential_space, self.ideal_potential(
-                self.plot_potential_space)),'pot_exact', 'potential')
+            self.store_data(zip(self.plot_potential_space, self.ideal_potential(self.plot_potential_space)),
+                            'pot_exact', 'potential')
 
-            self.store_data(zip(self.plot_potential_space, potential(
-                self.plot_potential_space)), 'pot_ideal', 'potential')
+            self.store_data(zip(self.plot_potential_space, potential(self.plot_potential_space)), 'pot_ideal',
+                            'potential')
 
             pylab.plot(self.plot_potential_space,
                        self.ideal_potential(self.plot_potential_space))
@@ -242,13 +245,10 @@ class TestRun(object):
         if self.plot_reflectivity:
             refl_ideal = self.reflcalc.refl(2 * self.k_space)
 
-            self.store_data(zip(2 * self.k_space, abs(self.reflectivity) ** 2), 'refl_exact',
-                            'reflectivity')
-            self.store_data(zip(2 * self.k_space, abs(refl_ideal) ** 2), 'refl_ideal',
-                            'reflectivity')
+            self.store_data(zip(2 * self.k_space, abs(self.reflectivity) ** 2), 'refl_exact', 'reflectivity')
+            self.store_data(zip(2 * self.k_space, abs(refl_ideal) ** 2), 'refl_ideal', 'reflectivity')
 
-            pylab.plot(2 * self.k_space,
-                       self.reflectivity.real ** 2 + self.reflectivity.imag ** 2)
+            pylab.plot(2 * self.k_space, self.reflectivity.real ** 2 + self.reflectivity.imag ** 2)
             pylab.plot(2 * self.k_space, self.real ** 2 + self.imag ** 2)
             pylab.plot(2 * self.k_space, refl_ideal.real ** 2 + refl_ideal.imag ** 2)
 
@@ -256,6 +256,11 @@ class TestRun(object):
             self.legends.append('Exact Reflectivity (w/o noise)')
             self.legends.append('Exact Reflectivity (w/ noise)')
             self.legends.append('Ideal Reflectivity')
+
+        if self.plot_reflection:
+            pylab.plot(2 * self.k_space, self.k_space ** 2 * self.reflectivity.real, label='Re R exact')
+            # pylab.plot(2 * self.k_space, self.k_space**2 * self.reflectivity.imag, label='Im R exact')
+            self.legends.append('Re R exact')
 
     def diagnosis(self):
         return self._diagnosis
@@ -299,8 +304,7 @@ class TestRun(object):
                     # refl = interpolator.reflcalc.refl(2 * self.k_space)
                     qmax = 1.0
                     refl = interpolator.reflcalc.refl(
-                        2 * numpy.linspace(0, qmax / 2,
-                                           int(self.q_precision * qmax * 1000) + 1))
+                        2 * numpy.linspace(0, qmax / 2, int(self.q_precision * qmax * 1000) + 1))
                     pylab.plot(
                         numpy.linspace(0, qmax / 2, int(self.q_precision * qmax * 1000) + 1),
                         numpy.angle(refl))
@@ -313,6 +317,11 @@ class TestRun(object):
                 self.store_data(zip(2 * self.k_space, abs(R) ** 2),
                                 'refl_it_{}'.format(iteration), 'reflectivity')
                 pylab.plot(2 * self.k_space, R.real ** 2 + R.imag ** 2, '--')
+
+            if self.plot_reflection:
+                R = interpolator.reflcalc.refl(2 * self.k_space)
+                pylab.plot(2 * self.k_space, self.k_space ** 2 * R.real, label='Re R')
+                # pylab.plot(2 * self.k_space, self.k_space**2 * R.imag, label='Im R')
 
             self.legends.append("Iteration {}".format(iteration))
 
@@ -339,13 +348,34 @@ class TestRun(object):
         if len(header) > 0:
             header = "\t".join(header)
 
-        numpy.savetxt(self.store_path + filename + ".dat", X, header=header, delimiter="\t")
+        numpy.savetxt(self.store_path + filename + ".dat", list(X), header=header, delimiter="\t")
+
+    def _store_before_manipulation(self):
+
+        # Zeroth iteration reconstruction, just for having an "initial" potential and phase
+        # Note that the phase is just completely zero below the critical edge (or whatever you set it to)
+        if self.plot_potential:
+            rec = PotentialReconstruction(self.thickness + self.offset, self.precision, cutoff=self.pot_cutoff)
+
+            transform = FourierTransform(self.k_space, self.real, self.imag)
+            potential = rec.reconstruct(transform)
+            self.store_data(zip(self.plot_potential_space, potential(self.plot_potential_space)), 'pot_it_0',
+                            'potential')
+
+        if self.plot_phase:
+            k_subspace = self.k_space[0:self.start_end[1]]
+
+            self.store_data(
+                zip(k_subspace, self.real[0:self.start_end[1]], self.imag[0:self.start_end[1]],
+                    self.real[0:self.start_end[1]] * k_subspace ** 2,
+                    self.imag[0:self.start_end[1]] * k_subspace ** 2), 'phase_it_0', 'phase')
 
     def run(self, constrain):
 
         self.setup()
-        # plot the exact potential/refl/ for comparison
+        # plot the exact potential/refl/phase for comparison
         self._plot_exact()
+        self._store_before_manipulation()
 
         rec = PotentialReconstruction(self.thickness + self.offset, self.precision,
                                       cutoff=self.pot_cutoff)

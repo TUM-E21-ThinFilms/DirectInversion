@@ -42,13 +42,13 @@ def simulate(var):
     test.pot_cutoff = 2
     test.use_only_real_part = False
     test.q_max = 0.5
-    test.plot_every_nth = 100
-    # test.store_path = 'store/test/kc/' + q_as_string + "/"
+    test.plot_every_nth = 1
+    test.store_path = 'store/test/iteration/' + q_as_string + "/"
     test.q_precision = 1
 
     test.start = 0
 
-    test.plot_potential = False
+    test.plot_potential = True
     test.plot_phase = False
     test.plot_reflectivity = False
     test.show_plot = False
