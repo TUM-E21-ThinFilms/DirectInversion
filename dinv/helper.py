@@ -388,7 +388,7 @@ class TestRun(object):
         # computing f1 each time.
 
         f1_index = slice(None, self.start_end[1]+1)
-        f2_index = slice(self.start_end[1]+1, None)
+        f2_index = slice(self.start_end[1], None)
         # self.real, self.imag contain the reflection coefficient
         f1 = FourierTransform(self.k_space[f1_index],
                               self.real[f1_index], self.imag[f1_index])
