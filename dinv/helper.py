@@ -172,7 +172,7 @@ class TestRun(object):
 
         self.plot_potential_space = numpy.linspace(
             0, self.thickness + self.offset,
-            10 * self.precision * (self.thickness + self.offset) + 1)
+            int(10 * self.precision * (self.thickness + self.offset) + 1))
 
         self.k_space = numpy.linspace(
             0, self.q_max / 2.0,
