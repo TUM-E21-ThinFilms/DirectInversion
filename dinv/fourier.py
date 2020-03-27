@@ -4,12 +4,12 @@ import pylab
 import scipy.integrate
 import scipy.interpolate
 
-from scipy.integrate import trapz, cumtrapz, quad
-from numpy import array, pi
-
 from typing import List
 
-from dinv.function import Function, invfourier_matrix
+from scipy.integrate import trapz
+from numpy import array, pi
+
+from dinv.function import Function, invfourier_matrix, InverseFourierTransform
 
 
 class GeneralFourierTransform(object):
@@ -256,6 +256,9 @@ class UpdateableFourierTransform(FourierTransform):
         # Allow this method to be called
         return self._f1.fourier_inverse(w) + self._f2.fourier_inverse(w)
 
+    def fourier(self, w):
+        return self._f1.fourier(w) + self._f2.fourier(w)
+
     def __call__(self, *args, **kwargs):
         w = args[0]
         return self._f1(w) + self._f2(w)
@@ -327,6 +330,7 @@ class FourierExtrapolation(object):
         self._f = fourier
         self._constrain = constraint
 
+    """
     def extrapolate(self, w_spaces: List[numpy.ndarray], constraint_space=None):
         if constraint_space is None:
             constraint_space = self._constrain.get_domain()
@@ -336,8 +340,6 @@ class FourierExtrapolation(object):
 
         mfull = numpy.concatenate([invfourier_matrix(w_space, constraint_space) for w_space in w_spaces], axis=1)
 
-        #actual = numpy.dot(invfourier_matrix(self._f.get_domain(), constraint_space), self._f(self._f.get_domain()))
-        from dinv.function import InverseFourierTransform
         actual = InverseFourierTransform.from_function(constraint_space, self._f)(constraint_space)
         target = self._constrain(constraint_space)
 
@@ -346,3 +348,78 @@ class FourierExtrapolation(object):
         f_extrapolate, residuals, rank, s = numpy.linalg.lstsq(mfull, b, rcond=1e-10)
 
         return f_extrapolate
+    """
+
+    def extrapolate(self, w_space: numpy.ndarray, constraint_space=None):
+        if constraint_space is None:
+            constraint_space = self._constrain.get_domain()
+
+        # Remove duplicates, usually this happens only at the interfaces of the domains...
+        # and thus we only check it for the first element
+        if w_space[0] in self._f.get_domain():
+            w_space = w_space[1:]
+
+
+        # make the frequency space symmetric
+        w_spaces = [- numpy.flip(w_space), w_space]
+        mfull = numpy.concatenate([invfourier_matrix(space, constraint_space) for space in w_spaces], axis=1)
+
+        print("Shape inversion matrix: {}".format(mfull.shape))
+        actual = InverseFourierTransform.from_function(constraint_space, self._f)(constraint_space)
+        target = self._constrain(constraint_space)
+
+        b = target - actual
+        f_extrapolate, residuals, rank, s = numpy.linalg.lstsq(mfull, b, rcond=1e-8)
+
+        print("Rank inversion matrix: {}".format(rank))
+
+        f_lower = f_extrapolate[0:len(w_space)]
+        f_upper = f_extrapolate[len(w_space):]
+
+        # Take the arithmetic average of upper and lower,
+        # note that since the reflection is "Hermitian", we have conj(f_lower(-w)) = f_upper(w)
+        f_upper = 0.5 * (numpy.conj(numpy.flip(f_lower)) + f_upper)
+
+        return w_space, f_upper
+
+    def extrapolate_function(self, w_space, constraint_space=None):
+
+        print("Extrapolating from w0 = {} to wn = {}".format(w_space[0], w_space[-1]))
+
+        w_space, f_new = self.extrapolate(w_space, constraint_space)
+
+        w_space_new = numpy.concatenate([-numpy.flip(w_space), self._f.get_domain(), w_space])
+        feval = numpy.concatenate([numpy.conj(numpy.flip(f_new)), self._f(self._f.get_domain()), f_new])
+
+        return Function.to_function(w_space_new, feval)
+
+    def test_solution(self, w_space: numpy.ndarray, fourier: numpy.ndarray, constraint_space=None):
+        if constraint_space is None:
+            constraint_space = self._constrain.get_domain()
+
+        mfull = invfourier_matrix(w_space, constraint_space)
+
+        actual = InverseFourierTransform.from_function(constraint_space, self._f)(constraint_space)
+        target = self._constrain(constraint_space)
+        b = target - actual
+
+        #pylab.plot(constraint_space, actual)
+        pylab.plot(constraint_space, numpy.dot(mfull, fourier).real)
+
+        error = numpy.sum(numpy.abs(numpy.dot(mfull, fourier) - b))
+
+        return error
+
+    def init(self, w_space: numpy.ndarray, constraint_space=None):
+        if constraint_space is None:
+            constraint_space = self._constrain.get_domain()
+
+        self._mfull = invfourier_matrix(w_space, constraint_space)
+
+        actual = InverseFourierTransform.from_function(constraint_space, self._f)(constraint_space)
+        target = self._constrain(constraint_space)
+        self._b = target - actual
+
+
+    def minimize(self, fourier: numpy.ndarray):
+        return numpy.sum(numpy.abs(numpy.dot(self._mfull, fourier) - self._b))

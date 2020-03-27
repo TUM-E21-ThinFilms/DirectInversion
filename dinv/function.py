@@ -15,6 +15,13 @@ class Function(object):
 
         self._f = function_callable
 
+    def shift(self, offset, domain=False):
+        f = self._f
+        self._f = lambda x: f(x-offset)
+
+        if domain is True:
+            self._dom = self._dom + offset
+
     def get_domain(self):
         return self._dom
 
@@ -47,6 +54,10 @@ class Function(object):
     def to_function(cls, domain, feval):
         return cls(domain, to_function(domain, feval))
 
+    def remesh(self, new_mesh):
+        self._f = to_function(new_mesh, self._f(new_mesh))
+        self._dom = new_mesh
+
     @classmethod
     def from_function(cls, fun: 'Function'):
         return cls.to_function(fun.get_domain(), fun.get_function())
@@ -61,7 +72,7 @@ class Function(object):
         if isinstance(other, Function):
             return Function(self._dom, lambda x: self._f(x) - other.get_function()(x))
         if isinstance(other, int) or isinstance(other, float):
-            return Function(self._dom, lambda x: self._f(x) + other)
+            return Function(self._dom, lambda x: self._f(x) - other)
 
     def __mul__(self, other):
         if isinstance(other, Function):
@@ -69,7 +80,7 @@ class Function(object):
         if isinstance(other, int) or isinstance(other, float):
             return Function(self._dom, lambda x: self._f(x) * other)
 
-    def __div__(self, other):
+    def __truediv__(self, other):
         if isinstance(other, Function):
             return Function(self._dom, lambda x: self._f(x) / other.get_function()(x))
         if isinstance(other, int) or isinstance(other, float):
@@ -81,10 +92,29 @@ class Function(object):
             plot_space = self.get_domain()
 
         feval = self._f(plot_space)
-        pylab.plot(plot_space, feval.real, **kwargs, label='Re')
+
+        lbl_re = {}
+        lbl_im = {}
+
+        try:
+            lbl = kwargs.pop("label")
+            if not lbl is None:
+                lbl_re["label"] = lbl
+                if not real:
+                    lbl_re["label"] = lbl + ' (Re)'
+                    lbl_im["label"] = lbl + ' (Im)'
+
+        except KeyError:
+            lbl = None
+
+        pylab.plot(plot_space, feval.real, **kwargs, **lbl_re)
+
         if not real:
-            pylab.plot(plot_space, feval.imag, **kwargs, label='Im')
-        pylab.legend()
+            pylab.plot(plot_space, feval.imag, **kwargs, **lbl_im)
+
+        if not lbl is None:
+            pylab.legend()
+
         if show:
             pylab.show()
 
@@ -140,7 +170,7 @@ class FourierTransform(Function):
 
     @classmethod
     def from_function(cls, frequency_domain, fun: Function):
-        fun.extend_domain()
+        # fun.extend_domain()
         return cls.to_function(fun.get_domain(), fun.get_function(), frequency_domain)
 
 
@@ -158,6 +188,28 @@ class InverseFourierTransform(Function):
     def from_function(cls, x_domain, fun: Function):
         # fun.extend_domain()
         return cls.to_function(fun.get_domain(), fun.get_function(), x_domain)
+
+class InverseCosineTransform(InverseFourierTransform):
+    @classmethod
+    def to_function(cls, frequency_domain, feval, x_domain):
+        dx = cls.get_dx(frequency_domain)
+        w = numpy.array(x_domain).reshape((len(x_domain), 1))
+        domain = numpy.array(frequency_domain).reshape((1, len(frequency_domain)))
+        feval = evaluate(domain, feval)
+
+        F = 1 / (numpy.pi) * trapz(feval * numpy.cos(numpy.dot(w, domain)), dx=dx)
+        return Function.to_function(x_domain, F)
+
+class CosineTransform(FourierTransform):
+    @classmethod
+    def to_function(cls, frequency_domain, feval, x_domain):
+        dx = cls.get_dx(frequency_domain)
+        w = numpy.array(x_domain).reshape((len(x_domain), 1))
+        domain = numpy.array(frequency_domain).reshape((1, len(frequency_domain)))
+        feval = evaluate(domain, feval)
+
+        F = trapz(feval * numpy.cos(numpy.dot(w, domain)), dx=dx)
+        return Function.to_function(x_domain, F)
 
 
 def evaluate(x_space, function):
@@ -197,6 +249,9 @@ def fourier_matrix(t_space, f_space):
 
     dt = t_space[1] - t_space[0]
 
+    if dt == 0:
+        raise RuntimeError("Given t_space has an incorrect format")
+
     f = numpy.array(f_space).reshape((len(f_space), 1))
     t = numpy.array(t_space).reshape((1, len(t_space)))
 
@@ -215,6 +270,8 @@ def invfourier_matrix(f_space, t_space):
     f_space = numpy.array(f_space)
 
     df = f_space[1] - f_space[0]
+    if df == 0:
+        raise RuntimeError("Given f_space has an incorrect format")
 
     f = numpy.array(f_space).reshape((1, len(f_space)))
     t = numpy.array(t_space).reshape((len(t_space), 1))

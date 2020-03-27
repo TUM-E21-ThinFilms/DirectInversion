@@ -8,7 +8,7 @@ from numpy import array
 
 dinv.glm._debug = False
 
-numpy.random.seed(1)
+#numpy.random.seed(1)
 
 numpy.set_printoptions(precision=2, linewidth=220)
 
@@ -101,9 +101,9 @@ if plot_potential:
     # cosine transform doesnt use imaginary part of the reflectivity amplitude
     #transform.method = transform.cosine_transform
 
-    rec = PotentialReconstruction(end, precision, pot_cutoff)
+    rec = PotentialReconstruction(end, precision, shift=offset/2, cutoff=pot_cutoff)
 
-    potential, x_space = rec.reconstruct(transform, shift=offset/2)
+    potential = rec.reconstruct(transform)
     reference_potential = potential
 
     pylab.plot(exact_potential[0], exact_potential[1])
@@ -125,15 +125,15 @@ for iter in range(0, iterations + 1):
     transform = FourierTransform(k_space, real, imag, offset)
     transform.method = transform.cosine_transform
 
-    rec = PotentialReconstruction(end, precision, pot_cutoff)
+    rec = PotentialReconstruction(end, precision, shift=offset/2, cutoff=pot_cutoff)
 
-    potential, _ = rec.reconstruct(transform, shift=offset/2)
+    potential = rec.reconstruct(transform)
     potential = constrain(potential, rec._xspace)
     reflcalc = ReflectionCalculation(potential, offset/2, end, 0.1)
 
     # Use the new reflection coefficient for small k-values and re-do the inversion ...
     R = reflcalc.refl(2 * k_space[start_end[0]:start_end[1]])
-    R = array(map(lambda x: x.real, R))
+    R = R.real
 
     exact_real = array((Refl[0])[start_end[0]:start_end[1]])
 

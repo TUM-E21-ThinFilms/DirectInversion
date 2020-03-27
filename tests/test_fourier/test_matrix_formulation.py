@@ -1,10 +1,4 @@
-import numpy as np
-import pylab
 
-from dinv.function import fourier_matrix, Function, FourierTransform, InverseFourierTransform, invfourier_matrix, Lp, Derivative
-from dinv.fourier import smooth
-
-from dinv.helper import load_potential
 
 def rect(x):
 
@@ -36,197 +30,207 @@ def rect(x):
         return 0
 
 
-x_space = np.linspace(-800, 800, 4000)
+if False:
+    import numpy as np
+    import pylab
 
-#potential = lambda x: rect(x / 400)
-#potential = smooth(potential, (x_space[0], x_space[-1]), 0.1, 5)
+    from dinv.function import fourier_matrix, Function, FourierTransform, InverseFourierTransform, \
+        invfourier_matrix, Lp, Derivative
+    from dinv.fourier import smooth
 
-potential = load_potential("../extrapolation/initial.dat")
+    from dinv.helper import load_potential
 
+    x_space = np.linspace(-800, 800, 4000)
 
-f = Function.to_function(x_space, potential)
+    #potential = lambda x: rect(x / 400)
+    #potential = smooth(potential, (x_space[0], x_space[-1]), 0.1, 5)
 
-w_space = np.linspace(-2, 2, 6000)
-barrier = 0.1
-idx_lower = np.argmax(w_space >= -barrier)
-idx_upper = np.argmin(w_space <= barrier)
+    potential = load_potential("../extrapolation/initial.dat")
 
-w_space_lower = w_space[idx_lower: idx_upper + 1]
-w_space_upper1 = w_space[0: idx_lower + 1]
-w_space_upper2 = w_space[idx_upper:]
-w_space_upper = np.append(w_space_upper1, w_space_upper2)
 
+    f = Function.to_function(x_space, potential)
 
-F = FourierTransform.from_function(w_space, f)
-#error = Function(w_space, lambda x: np.random.normal(1, 0.1))
-#F = F * error
+    w_space = np.linspace(-2, 2, 6000)
+    barrier = 0.1
+    idx_lower = np.argmax(w_space >= -barrier)
+    idx_upper = np.argmin(w_space <= barrier)
 
-Flower = Function.to_function(w_space_lower, F)
+    w_space_lower = w_space[idx_lower: idx_upper + 1]
+    w_space_upper1 = w_space[0: idx_lower + 1]
+    w_space_upper2 = w_space[idx_upper:]
+    w_space_upper = np.append(w_space_upper1, w_space_upper2)
 
-# Flowerm = np.dot(fourier_matrix(x_space, w_space_lower), f(x_space))
 
+    F = FourierTransform.from_function(w_space, f)
+    #error = Function(w_space, lambda x: np.random.normal(1, 0.1))
+    #F = F * error
 
-Fupper1 = Function.to_function(w_space_upper1, F)
-Fupper2 = Function.to_function(w_space_upper2, F)
-Fupper = Fupper1 + Fupper2
+    Flower = Function.to_function(w_space_lower, F)
 
-flower = InverseFourierTransform.from_function(x_space, Flower)
-fupper1 = InverseFourierTransform.from_function(x_space, Fupper1)
-fupper2 = InverseFourierTransform.from_function(x_space, Fupper2)
+    # Flowerm = np.dot(fourier_matrix(x_space, w_space_lower), f(x_space))
 
-fupper = fupper1 + fupper2
-ffull = InverseFourierTransform.from_function(x_space, F)
 
-w_plot_space = np.linspace(-0.3, 0.3, 1000)
-x_plot_space = np.linspace(300, 3000, 1000)
+    Fupper1 = Function.to_function(w_space_upper1, F)
+    Fupper2 = Function.to_function(w_space_upper2, F)
+    Fupper = Fupper1 + Fupper2
 
-"""
-mupper1 = invfourier_matrix(w_space_upper1, x_plot_space)
-mupper2 = invfourier_matrix(w_space_upper2, x_plot_space)
-mlower = invfourier_matrix(w_space_lower, x_plot_space)
-"""
+    flower = InverseFourierTransform.from_function(x_space, Flower)
+    fupper1 = InverseFourierTransform.from_function(x_space, Fupper1)
+    fupper2 = InverseFourierTransform.from_function(x_space, Fupper2)
 
-pylab.subplot(2, 2, 1)
-pylab.ylabel("SLD V")
-f.real.plot(x_space)
+    fupper = fupper1 + fupper2
+    ffull = InverseFourierTransform.from_function(x_space, F)
 
-pylab.subplot(2, 2, 2)
-pylab.ylabel("F[V] (Fourier transform truncated)")
-Flower.real.plot(w_plot_space)
-Fupper.real.plot(w_plot_space)
-Flowerm = np.dot(fourier_matrix(x_space, w_space_lower), f(x_space))
-pylab.plot(w_space_lower, Flowerm.real  )
+    w_plot_space = np.linspace(-0.3, 0.3, 1000)
+    x_plot_space = np.linspace(300, 3000, 1000)
 
-# Fupper.real.plot(w_plot_space)
+    """
+    mupper1 = invfourier_matrix(w_space_upper1, x_plot_space)
+    mupper2 = invfourier_matrix(w_space_upper2, x_plot_space)
+    mlower = invfourier_matrix(w_space_lower, x_plot_space)
+    """
 
+    pylab.subplot(2, 2, 1)
+    pylab.ylabel("SLD V")
+    f.real.plot(x_space)
 
-pylab.subplot(2, 2, 4)
-pylab.ylabel("F[V] (Fourier transform) reconstructed")
+    pylab.subplot(2, 2, 2)
+    pylab.ylabel("F[V] (Fourier transform truncated)")
+    Flower.real.plot(w_plot_space)
+    Fupper.real.plot(w_plot_space)
+    Flowerm = np.dot(fourier_matrix(x_space, w_space_lower), f(x_space))
+    pylab.plot(w_space_lower, Flowerm.real  )
 
-#(ffull - f).real.plot(x_plot_space)
-#(ffull - f).imag.plot(x_plot_space)
-#(flower + fupper - ffull).real.plot(x_plot_space)
-#(fupper).real.plot(x_plot_space)
-#pylab.plot(x_plot_space, np.dot(invfourier_matrix(w_space_lower, x_plot_space), Flower(w_space_lower)) + np.dot(invfourier_matrix(w_space_upper1, x_plot_space), Fupper1(w_space_upper1)) + np.dot(invfourier_matrix(w_space_upper2, x_plot_space), Fupper2(w_space_upper2)))
+    # Fupper.real.plot(w_plot_space)
 
-x_known = np.linspace(190, 220, 30)
-y_known = np.array(len(x_known) * [8.0239e-6])
 
-x_constrain_space = np.append(np.linspace(-1000, 50, 1000), np.linspace(330, 1000, 1000))
-#x_constrain_space = np.append(x_constrain_space, x_known)
+    pylab.subplot(2, 2, 4)
+    pylab.ylabel("F[V] (Fourier transform) reconstructed")
 
-#x_constrain_space = np.linspace(0, 500, 5000)
+    #(ffull - f).real.plot(x_plot_space)
+    #(ffull - f).imag.plot(x_plot_space)
+    #(flower + fupper - ffull).real.plot(x_plot_space)
+    #(fupper).real.plot(x_plot_space)
+    #pylab.plot(x_plot_space, np.dot(invfourier_matrix(w_space_lower, x_plot_space), Flower(w_space_lower)) + np.dot(invfourier_matrix(w_space_upper1, x_plot_space), Fupper1(w_space_upper1)) + np.dot(invfourier_matrix(w_space_upper2, x_plot_space), Fupper2(w_space_upper2)))
 
-m1 = invfourier_matrix(w_space_upper1, x_constrain_space)
-m2 = invfourier_matrix(w_space_upper2, x_constrain_space)
-m = np.append(m1, m2, axis=1)
-#print(np.linalg.cond(m))
+    x_known = np.linspace(190, 220, 30)
+    y_known = np.array(len(x_known) * [8.0239e-6])
 
-ml = invfourier_matrix(w_space_lower, x_constrain_space)
-Fl = Flower(w_space_lower)
+    x_constrain_space = np.append(np.linspace(-1000, 50, 1000), np.linspace(330, 1000, 1000))
+    #x_constrain_space = np.append(x_constrain_space, x_known)
 
-b = f(x_constrain_space) - np.dot(ml, Fl)
-#b[-1-len(x_known):-1] += y_known
+    #x_constrain_space = np.linspace(0, 500, 5000)
 
-#b[]
+    m1 = invfourier_matrix(w_space_upper1, x_constrain_space)
+    m2 = invfourier_matrix(w_space_upper2, x_constrain_space)
+    m = np.append(m1, m2, axis=1)
+    #print(np.linalg.cond(m))
 
-fupperm, residuals, rank, s = np.linalg.lstsq(m, b, rcond=1e-10)
-#print(residuals)
-#print(np.linalg.cond(m1))
-#print(np.linalg.cond(m2))
+    ml = invfourier_matrix(w_space_lower, x_constrain_space)
+    Fl = Flower(w_space_lower)
 
+    b = f(x_constrain_space) - np.dot(ml, Fl)
+    #b[-1-len(x_known):-1] += y_known
 
+    #b[]
 
+    fupperm, residuals, rank, s = np.linalg.lstsq(m, b, rcond=1e-10)
+    #print(residuals)
+    #print(np.linalg.cond(m1))
+    #print(np.linalg.cond(m2))
 
 
-F = np.append(Fupper1(w_space_upper1), Fupper2(w_space_upper2))
 
-#pylab.plot(x_plot_space, np.dot(invfourier_matrix(w_space_upper1, x_plot_space), Fupper1(w_space_upper1)) + np.dot(invfourier_matrix(w_space_upper2, x_plot_space), Fupper2(w_space_upper2)))
-#pylab.plot(x_plot_space, flower(x_plot_space))
-#pylab.plot(x_plot_space, np.dot(m, F) + b)
 
-nbarrier = 0.2
-idx = abs(w_space_upper) < nbarrier
 
-idx1 = w_space_upper1 > -nbarrier
-idx2 = w_space_upper2 < nbarrier
+    F = np.append(Fupper1(w_space_upper1), Fupper2(w_space_upper2))
 
-idx = np.append(idx1, idx2)
+    #pylab.plot(x_plot_space, np.dot(invfourier_matrix(w_space_upper1, x_plot_space), Fupper1(w_space_upper1)) + np.dot(invfourier_matrix(w_space_upper2, x_plot_space), Fupper2(w_space_upper2)))
+    #pylab.plot(x_plot_space, flower(x_plot_space))
+    #pylab.plot(x_plot_space, np.dot(m, F) + b)
 
-fmiddle = fupperm[idx]
-pylab.plot(w_space_upper[idx], fmiddle.real)
-#pylab.plot(w_space_upper[idx], fmiddle.imag)
-#pylab.plot(w_space_upper, fupperm)
-pylab.plot(w_space_upper[idx], F[idx].real)
+    nbarrier = 0.2
+    idx = abs(w_space_upper) < nbarrier
 
+    idx1 = w_space_upper1 > -nbarrier
+    idx2 = w_space_upper2 < nbarrier
 
-m1 = invfourier_matrix(w_space_upper1[idx1], x_space)
-m2 = invfourier_matrix(w_space_upper2[idx2], x_space)
+    idx = np.append(idx1, idx2)
 
-mp = np.append(m1, m2, axis=1)
+    fmiddle = fupperm[idx]
+    pylab.plot(w_space_upper[idx], fmiddle.real)
+    #pylab.plot(w_space_upper[idx], fmiddle.imag)
+    #pylab.plot(w_space_upper, fupperm)
+    pylab.plot(w_space_upper[idx], F[idx].real)
 
-fimproved = Function.to_function(x_space, flower(x_space) + np.dot(mp, fmiddle))
 
+    m1 = invfourier_matrix(w_space_upper1[idx1], x_space)
+    m2 = invfourier_matrix(w_space_upper2[idx2], x_space)
 
+    mp = np.append(m1, m2, axis=1)
 
+    fimproved = Function.to_function(x_space, flower(x_space) + np.dot(mp, fmiddle))
 
 
 
-#pylab.plot(w_space_upper[idx], F[idx].imag)
 
 
 
-#pylab.plot(x_plot_space, np.dot(m1, Fupper1(w_space_upper1)) + np.dot(m2, Fupper2(w_space_upper2)))
-#pylab.plot(x_plot_space, np.dot(m, fupper(w_space_upper)))
-#pylab.plot(w_space_upper, fupperm)
+    #pylab.plot(w_space_upper[idx], F[idx].imag)
 
-#pylab.plot(x_plot_space, np.dot(invfourier_matrix(w_space_upper1, x_plot_space), Fupper1(w_space_upper1)) + np.dot(invfourier_matrix(w_space_upper2, x_plot_space), Fupper2(w_space_upper2)))
-#pylab.plot(x_plot_space, )
 
-# pylab.plot(x_plot_space, 2 * np.dot(mupper1, Fupper1(w_space_upper1)))
-# pylab.plot(x_plot_space, np.dot(mlower, Flower(w_space_lower)))
 
-pylab.subplot(2, 2, 3)
-pylab.ylabel("SLD (Potential) reconstructed")
-#f.real.plot(x_space)
-flower.real.plot(x_space)
-#fupper.real.plot(x_space)
+    #pylab.plot(x_plot_space, np.dot(m1, Fupper1(w_space_upper1)) + np.dot(m2, Fupper2(w_space_upper2)))
+    #pylab.plot(x_plot_space, np.dot(m, fupper(w_space_upper)))
+    #pylab.plot(w_space_upper, fupperm)
 
-fp = Derivative.to_function(np.linspace(70, 320, 1000), fimproved)
-fpp = Derivative.from_function(fp)
+    #pylab.plot(x_plot_space, np.dot(invfourier_matrix(w_space_upper1, x_plot_space), Fupper1(w_space_upper1)) + np.dot(invfourier_matrix(w_space_upper2, x_plot_space), Fupper2(w_space_upper2)))
+    #pylab.plot(x_plot_space, )
 
+    # pylab.plot(x_plot_space, 2 * np.dot(mupper1, Fupper1(w_space_upper1)))
+    # pylab.plot(x_plot_space, np.dot(mlower, Flower(w_space_lower)))
 
-#fp = Derivative.to_function(flower.get_domain(), flower.get_function())
-#fpp = Derivative.to_function(fp.get_domain(), fp.get_function()) * 100
-(fpp).real.plot(x_space)
-zeros = fpp.find_zeros()
-for z in zeros:
-    pylab.axvline(z)
+    pylab.subplot(2, 2, 3)
+    pylab.ylabel("SLD (Potential) reconstructed")
+    #f.real.plot(x_space)
+    flower.real.plot(x_space)
+    #fupper.real.plot(x_space)
 
+    fp = Derivative.to_function(np.linspace(70, 320, 1000), fimproved)
+    fpp = Derivative.from_function(fp)
 
-#(flower + fupper).real.plot(x_space)
-ffull.real.plot(x_space)
 
+    #fp = Derivative.to_function(flower.get_domain(), flower.get_function())
+    #fpp = Derivative.to_function(fp.get_domain(), fp.get_function()) * 100
+    (fpp).real.plot(x_space)
+    zeros = fpp.find_zeros()
+    for z in zeros:
+        pylab.axvline(z)
 
-"""
-m1 = invfourier_matrix(w_space_upper1, x_space)
-m2 = invfourier_matrix(w_space_upper2, x_space)
-mp = np.append(m1, m2, axis=1)
 
-pylab.plot(x_plot_space, np.dot(ml, Fl) + np.dot(m, fupperm)  , color='green')
-pylab.plot(x_space, flower(x_space) + np.dot(mp, fupperm), color='green')
-"""
+    #(flower + fupper).real.plot(x_space)
+    ffull.real.plot(x_space)
 
 
-fimproved.real.plot()
-#pylab.plot(x_space, (flower(x_space) + np.dot(mp, fmiddle)).real, color='green')
+    """
+    m1 = invfourier_matrix(w_space_upper1, x_space)
+    m2 = invfourier_matrix(w_space_upper2, x_space)
+    mp = np.append(m1, m2, axis=1)
+    
+    pylab.plot(x_plot_space, np.dot(ml, Fl) + np.dot(m, fupperm)  , color='green')
+    pylab.plot(x_space, flower(x_space) + np.dot(mp, fupperm), color='green')
+    """
 
 
-#print(Lp(f, ffull))
-print(Lp(ffull, fimproved))
-#print(Lp(ffull, flower))
+    fimproved.real.plot()
+    #pylab.plot(x_space, (flower(x_space) + np.dot(mp, fmiddle)).real, color='green')
 
 
+    #print(Lp(f, ffull))
+    print(Lp(ffull, fimproved))
+    #print(Lp(ffull, flower))
 
 
-pylab.show()
+
+
+    pylab.show()

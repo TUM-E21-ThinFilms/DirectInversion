@@ -8,7 +8,10 @@ from dinv.function import (
     Function,
     FourierTransform,
     InverseFourierTransform,
-    fourier_matrix
+    fourier_matrix,
+    InverseCosineTransform,
+    invfourier_matrix,
+    Lp
 )
 
 import numpy as np
@@ -18,10 +21,16 @@ import pylab
 print(time.ctime())
 
 potential = load_potential("initial.dat", as_function=True)
+# potential = load_potential("../random/profile.dat", as_function=True)
 potential = Function(potential.get_domain(), potential)
+potential.shift(-25)
 
-c1 = Function.to_function(np.append(np.linspace(-1000, 50, 1000), np.linspace(330, 1000, 1000)), lambda x: 0)
-c2 = Function.to_function(np.append(np.linspace(-1000, 50, 1000), np.linspace(330, 1000, 1000)), lambda x: 0)
+# c1 = Function.to_function(np.append(np.linspace(-1000, -30, 1000), np.linspace(350, 1000, 1000)), lambda x: 0)
+#c1 = Function.to_function(np.append(np.linspace(-1000, 50, 500), np.linspace(350, 1000, 500)), lambda x: 0)
+c2 = Function.to_function(np.append(np.linspace(-1000, 50, 700), np.linspace(350, 1000, 700)), lambda x: 0)
+
+
+# c2 = Function.to_function(np.append(np.linspace(-1000, 50, 1000), np.linspace(330, 1000, 1000)), lambda x: 0)
 
 
 # c2 = Function.to_function(np.linspace(-1000, 50, 100), lambda x: 0)
@@ -32,96 +41,202 @@ c2 = Function.to_function(np.append(np.linspace(-1000, 50, 1000), np.linspace(33
 
 
 def to_potential(fourier_transform):
+    # return InverseCosineTransform.from_function(np.linspace(-500, 500, 1000), fourier_transform)
+    #return InverseFourierTransform.from_function(np.linspace(-500, 500, 1000), fourier_transform)
+    w_space = fourier_transform.get_domain()
+    x_space = np.linspace(-500, 500, 1000)
+    transform_matrix = invfourier_matrix(w_space, x_space)
+
+    pot = np.dot(transform_matrix, fourier_transform(w_space))
+    return Function.to_function(x_space, pot)
+
+def to_potential2(fourier_transform):
     return InverseFourierTransform.from_function(np.linspace(-500, 500, 1000), fourier_transform)
+
+def to_reflection(potential):
+    return FourierTransform.from_function(np.linspace(-1, 1, 4000), potential)
 
 
 def to_file(f: Function, file):
     x = f.get_domain()
     feval = f(x)
     np.savetxt(file, np.column_stack([x, feval.real, feval.imag]), header='x f(x).real f(x).imag')
-
+    print("saved to file")
 
 def from_file(file):
     x, freal, fimag = np.loadtxt(file).T
     return Function.to_function(x, freal + 1j * fimag)
 
-def new_space(barrier):
-    w_extr_spaces = [np.linspace(-1, -barrier, l, endpoint=False),
-                     # just so that barriers[it-1] is removed as an endpoint ...
-                     - np.flip(np.linspace(-1, -barrier, l, endpoint=False))]
-    return w_extr_spaces, np.concatenate(w_extr_spaces)
-
-
 
 f = FourierTransform.from_function(np.linspace(-1, 1, 5000), potential)
+f.remesh(np.linspace(-1, 1, 5000))
 
-rows = 4
+scaling = Function(f.get_domain(), lambda x: x ** 2 * 100)
+
+rows = 3
 i = 4
-barriers = [0.2, 0.25, 0.3]
-constraints = [None, c1, c2]
+barriers = [0.1, 0.101, 0.102, 0.103, 0.104, 0.2]
+# barriers = [0.15, 0.2, 0.25]
+constraints = [c2, c2, c2, c2, c2, c2, c2, c2]
 w_lengths = [None, 2000, 500]
 w_space = np.linspace(-barriers[0], barriers[0], 1000)
+k_max = 2
 
 try:
     f_measured = from_file("measured_fourier.dat")
-    feval = f_measured(f_measured.get_domain())
+    raise RuntimeError()
     save = False
-    w_space = f_measured.get_domain()
+    it = 2
 except Exception as e:
-    print(e)
     save = True
+    f_measured = Function.to_function(w_space, f(w_space))
+    f_measured.remesh(np.linspace(-barriers[0], barriers[0], 2000))
 
-    feval = f(w_space)
-    f_measured = Function.to_function(w_space, feval)
-    print("Calculated f measured")
+    print("Using calculated f")
+    it = 1
 
-pylab.subplot(rows, 2, 1)
-f.plot(np.linspace(-0.2, 0.2, 1000), real=False)
-pylab.subplot(rows, 2, 2)
+pylab.subplot(rows, 4, 1)
+(scaling * f).plot(real=False)
+pylab.subplot(rows, 4, 2)
 to_potential(f).plot()
+pylab.subplot(rows, 4, 3)
 
-pylab.subplot(rows, 2, 3)
-f.plot(f_measured.get_domain(), real=False)
-f_measured.plot(real=False)
+(f * scaling).plot(f_measured.get_domain(), real=False)
+(f_measured * scaling).plot(real=False)
 
-pylab.subplot(rows, 2, 4)
-to_potential(f_measured).plot()
+pylab.subplot(rows, 4, 4)
+pot = to_potential(f_measured)
+pot.plot()
 
 
-for it in range(1, 2):
-    barrier = barriers[it]
-    constraint = constraints[it]
 
-    extr_algorithm = FourierExtrapolation(f_measured, constraint)
-    l = w_lengths[it]
 
-    w_extr_spaces, w_extr_space = new_space(barriers[it-1])
 
-    extrapolation = extr_algorithm.extrapolate(w_extr_spaces)
 
-    idx_lower = np.bitwise_and(0 >= w_extr_space, w_extr_space > - barrier)
-    idx_upper = np.bitwise_and(0 <= w_extr_space, w_extr_space < barrier)
 
-    f_add_lower = extrapolation[idx_lower]
-    w_space_lower = w_extr_space[idx_lower]
-    f_add_upper = extrapolation[idx_upper]
-    w_space_upper = w_extr_space[idx_upper]
+# for it in range(1, rows):
 
-    w_space = np.concatenate([w_space_lower, w_space, w_space_upper])
-    feval = np.concatenate([f_add_lower, feval, f_add_upper])
-    f_measured = Function.to_function(w_space, feval)
-    w_interpolated = np.linspace(min(w_space), max(w_space), 2000)
-    f_measured = Function.to_function(w_interpolated, f_measured(w_interpolated))
+extr_algorithm = FourierExtrapolation(f_measured, constraints[it])
+
+f_measured = extr_algorithm.extrapolate_function(np.linspace(f_measured.get_domain().max(), k_max, 10000))
+f_measured.remesh(np.linspace(-barriers[it], barriers[it], int(100 * barriers[it] * 1000)))
+
+
+w_space_test = np.linspace(barriers[it], k_max, 2000)
+#pylab.subplot(rows, 4, 9)
+extr_algorithm.init(w_space_test)
+
+
+print("Error: {0:e}".format(extr_algorithm.minimize(f_measured(w_space_test))))
+print("Error exact: {0:e}".format(extr_algorithm.minimize(f(w_space_test))))
+
+
+i = i + 1
+pylab.subplot(rows, 4, i)
+(f * scaling).plot(f_measured.get_domain(), label="True", real=False)
+(f_measured * scaling).plot(real=False)
+# pylab.ylim(-1.5e-3, 1.5e-3)
+
+
+i = i + 1
+pylab.subplot(rows, 4, i)
+
+f_plot = Function.from_function(f)
+f_plot.remesh(np.linspace(-barriers[it], barriers[it], 5000))
+to_potential(f_plot).plot(label="exact")
+to_potential(f_measured).plot(label="reconstructed")
+
+#print(Lp(to_potential(f_plot), potential, domain=constraints[it].get_domain()))
+#print(Lp(to_potential(f_measured), potential, domain=constraints[it].get_domain()))
+
+#constraints[it].plot(marker='.')
+
+i = i + 1
+pylab.subplot(rows, 4, i)
+pot = to_potential(f_measured)
+pot.remesh(np.linspace(-25, 350, 1000))
+f_new = to_reflection(pot)
+f_new.remesh(f_measured.get_domain())
+(f * scaling).plot(f_measured.get_domain(), real=False)
+((f_new) * scaling).plot(f_measured.get_domain(), real=False)
+
+i = i + 1
+pylab.subplot(rows, 4, i)
+f_new.remesh(f_measured.get_domain())
+# f_new.remesh(np.linspace(-f_measured.get_domain().max(), f_measured.get_domain().max(), 2000))
+to_potential(f_plot).plot(label="exact")
+to_potential(f_new).plot(np.linspace(-25, 350, 1000), label="reconstructed")
+
+f_measured = f_new
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+if True:
+    it = 2
+    extr_algorithm = FourierExtrapolation(f_measured, constraints[it])
+
+    f_measured = extr_algorithm.extrapolate_function(np.linspace(f_measured.get_domain().max(), k_max, 10000))
+    f_measured.remesh(np.linspace(-barriers[it], barriers[it], int(100 * barriers[it] * 1000)))
+
+    extr_algorithm.init(w_space_test)
+
+    print("Error: {0:e}".format(extr_algorithm.minimize(f_measured(w_space_test))))
+    print("Error exact: {0:e}".format(extr_algorithm.minimize(f(w_space_test))))
 
     i = i + 1
-    pylab.subplot(rows, 2, i)
-    f.plot(f_measured.get_domain(), real=False)
-    f_measured.plot(real=False)
-    pylab.ylim(-1.5e-3, 1.5e-3)
+    pylab.subplot(rows, 4, i)
+    (f * scaling).plot(f_measured.get_domain(), label="True", real=False)
+    (f_measured * scaling).plot(real=False)
+    # pylab.ylim(-1.5e-3, 1.5e-3)
+
+
     i = i + 1
-    pylab.subplot(rows, 2, i)
-    to_potential(f_measured).plot()
-    # constraints[it].plot(marker='.')
+    pylab.subplot(rows, 4, i)
+
+    f_plot = Function.from_function(f)
+    f_plot.remesh(np.linspace(-barriers[it], barriers[it], 5000))
+    to_potential(f_plot).plot(label="exact")
+    to_potential(f_measured).plot(label="reconstructed")
+
+    i = i + 1
+    pylab.subplot(rows, 4, i)
+    pot = to_potential(f_measured)
+    pot.remesh(np.linspace(-25, 350, 1000))
+    f_new = to_reflection(pot)
+    f_new.remesh(f_measured.get_domain())
+    (f * scaling).plot(f_measured.get_domain(), real=False)
+    ((f_new) * scaling).plot(f_measured.get_domain(), real=False)
+
+    i = i + 1
+    pylab.subplot(rows, 4, i)
+    f_new.remesh(f_measured.get_domain())
+    # f_new.remesh(np.linspace(-f_measured.get_domain().max(), f_measured.get_domain().max(), 2000))
+    to_potential(f_plot).plot(label="exact")
+    to_potential(f_new).plot(np.linspace(-25, 350, 1000), label="reconstructed")
+
+    f_measured = f_new
+
+
+
+
+
+
+
+
+
+
 
 if save:
     to_file(f_measured, "measured_fourier.dat")

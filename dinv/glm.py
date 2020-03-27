@@ -218,7 +218,7 @@ class PotentialReconstruction(object):
         self._prec = precision
         self._cut = cutoff
 
-        self._xspace, self._dx = numpy.linspace(0, self._end, self._prec * self._end + 1,
+        self._xspace, self._dx = numpy.linspace(0, self._end, int(self._prec * self._end + 1),
                                                 retstep=True)
         self._xspace += shift
 
@@ -283,8 +283,8 @@ class ReflectionCalculation(object):
         return self.refl(2 * k)
 
     def plot_potential(self, style='--', label='', show=False):
-        z_space = numpy.linspace(self._z0, self._z1, (self._z1 - self._z0) / self._dz + 1)
-        pylab.plot(z_space, self._pot(z_space), style, label=label)
+        z_space = numpy.linspace(self._z0, self._z1, int((self._z1 - self._z0) / self._dz + 1))
+        pylab.plot(z_space, self._pot(z_space).real, style, label=label)
         pylab.xlabel('z [A]')
         pylab.ylabel('V(z) (SLD) [A^-2]')
         if show:

@@ -20,7 +20,7 @@ def sinc(x):
 
 
 def test_gauss():
-    domain = numpy.linspace(-1, 1, 1000)
+    domain = numpy.linspace(-1, 1, 10000)
     f = Function.to_function(domain, lambda x: rect(1 / (2 * numpy.pi) * x))
 
     freq_dom = numpy.linspace(-20, 20, 1000)
@@ -36,7 +36,7 @@ def test_gauss():
     pylab.show()
     """
 
-    TOL = 1e-2
+    TOL = 1e-6
 
     for w in freq_dom:
         assert abs(fourier_trafo(w) - F(w)) <= TOL
