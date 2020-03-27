@@ -16,7 +16,7 @@ def constrain(potential, x_space):
     interpolation = scipy.interpolate.interp1d(x_space, data, fill_value=(0, 0), bounds_error=False)
     return interpolation
 
-test = TestRun("simulation-1-profile.dat")
+test = TestRun("simulation.profile")
 
 
 test.cutoff = 0.0085

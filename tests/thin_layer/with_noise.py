@@ -17,7 +17,7 @@ def constrain(potential, x_space):
     return interpolation
 
 
-test = TestRun("profile.dat")
+test = TestRun("simulation.profile")
 
 test.cutoff = 0.01
 test.noise = 1e-1

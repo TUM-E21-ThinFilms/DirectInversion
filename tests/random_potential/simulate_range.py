@@ -29,7 +29,7 @@ def simulate(var):
     print(var)
     print("\n\n\n")
 
-    test = TestRun("simulation-1-profile.dat")
+    test = TestRun("simulation.profile")
     q_as_string = str(var).replace(".", 'd')
 
     test.cutoff = var #0.0085

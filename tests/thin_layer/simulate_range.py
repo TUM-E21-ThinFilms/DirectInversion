@@ -32,7 +32,7 @@ def simulate(var):
     print("\n\n\n")
     print(var)
 
-    test = TestRun("simulation-1-profile.dat")
+    test = TestRun("simulation.profile")
     path = str(var).replace('.', 'd')
 
     test.cutoff = var #0.01

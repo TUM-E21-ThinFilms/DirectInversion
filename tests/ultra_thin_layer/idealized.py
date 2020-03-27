@@ -28,7 +28,7 @@ def constrain(potential, x_space):
     return interpolation
 
 
-test = TestRun("profile.dat")
+test = TestRun("simulation.profile")
 
 test.cutoff = 0.01
 test.noise = 0
@@ -41,7 +41,7 @@ test.pot_cutoff = 2
 test.plot_every_nth = 10
 test.q_max = 5.0
 
-test.store_path = 'store/'
+#test.store_path = 'store/'
 
 test.plot_potential = True
 test.plot_phase = False
