@@ -18,7 +18,7 @@ def constrain(potential, x_space):
 
 
 print("might take some time to calculate the initial reflectivity ...")
-test = TestRun("profile.dat")
+test = TestRun("simulation.profile")
 
 test.cutoff = 0.007
 test.noise = 0
