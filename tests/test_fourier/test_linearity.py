@@ -1,7 +1,7 @@
 import numpy as np
 
 from dinv.function import Function, FourierTransform
-
+from ..helper import assert_equal
 
 
 def test_linearity():
@@ -18,8 +18,5 @@ def test_linearity():
     F3 = FourierTransform.from_function(w_space, f3)
     F3p = FourierTransform.from_function(w_space, (f1 + f2))
 
-
-    TOL = 1e-5
-    for w in w_space:
-        assert abs(F1(w) + F2(w) - F3(w)) <= TOL
-        assert abs(F3(w) - F3p(w)) <= TOL
+    assert_equal(F1 + F2, F3)
+    assert_equal(F3, F3p)

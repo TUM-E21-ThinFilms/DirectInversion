@@ -20,7 +20,7 @@ import pylab
 
 print(time.ctime())
 
-potential = load_potential("initial.dat", as_function=True)
+potential = load_potential("simulation.profile", as_function=True)
 # potential = load_potential("../random/profile.dat", as_function=True)
 potential = Function(potential.get_domain(), potential)
 potential.shift(-25)
