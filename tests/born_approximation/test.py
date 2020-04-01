@@ -25,7 +25,7 @@ x_space = np.linspace(-10, thickness, 10000)
 
 
 potential = load_potential("profile.dat", as_function=True)
-potential.shift(25, True)
+potential = potential.shift(25, True)
 #potential = shift_potential(potential, 50)
 
 # potential = numpy.loadtxt("profile.dat").T

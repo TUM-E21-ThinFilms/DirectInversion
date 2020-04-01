@@ -4,7 +4,6 @@ from dinv.function import Function
 from ..helper import assert_equal
 
 
-
 def test_addition():
     f1 = Function(np.linspace(0, 10, 100), lambda x: np.sin(x) ** 2)
     f2 = Function(np.linspace(0, 20, 100), lambda x: np.cos(x) ** 2)
@@ -71,3 +70,19 @@ def test_division_with_constant():
     f3 = Function(np.linspace(1, 11, 100), lambda x: x ** 2)
 
     assert_equal(f1 / 4, f3)
+
+def test_power():
+    f1 = Function(np.linspace(0, 10, 100), lambda x: x)
+    f2 = Function(np.linspace(0, 10, 100), lambda x: x**2)
+
+    assert_equal(f1**2, f2)
+
+def test_power_with_function():
+    f1 = Function(np.linspace(0, 10, 100), lambda x: x**2)
+    f2 = Function(np.linspace(0, 10, 100), lambda x: 0.5)
+
+    f3 = Function(np.linspace(0, 10, 100), lambda x: x)
+    f4 = Function(np.linspace(0, 10, 100), lambda x: 0.5**x)
+
+    assert_equal(f1**f2, f3)
+    assert_equal(f2**f3, f4)

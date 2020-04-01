@@ -1,10 +1,56 @@
 import numpy
 import scipy.interpolate
-from scipy.integrate import trapz
 
+from scipy.integrate import trapz
+from dinv.util import vslice
 
 class Function(object):
+    """
+    A mathematical function
+
+    A function is in principle just a relation on a domain and the relation operation. Thus, every function
+    here needs a domain (mesh/grid) together with a callable object (relation).
+
+    Functions support the add, sub, mul, div and power operators:
+
+    :Example:
+    >>> f, g = Function(), Function
+    >>> f + g, f + 3
+    >>> f - g, f - 3
+    >>> f * g, g * 3
+    >>> f / g, f / 3
+    >>> f ** g, f ** 3
+
+    Composition is also possible:
+    :Example:
+    >>> f.apply(g) == g(f) # Use this if g is a build-in function, like abs
+    >>> f.composeWith(g) == f(g)
+    >>> g.composeWith(f) == g(f) # This is only possible if g is a Function
+
+    Plotting is done
+    :Example:
+    >>> f.plot() # plots f on the whole domain (f.get_domain())
+    >>> g.plot(domain, show=True) # plots g on domain
+    """
+
     def __init__(self, domain, function_callable):
+        """
+        Creates a mathematical function based on the given domain and callable object.
+
+        A function always needs a domain and a relation, i.e. f: X -> C
+        with X being the domain, and C being the complex numbers.
+
+        :Example:
+        >>> f = Function(range(0, 10), lambda x: x**2)
+        >>> g = Function(numpy.linspace(0, 10, 1000), lambda x: x**2)
+        >>> h = Function(numpy.linspace(-10, 10, 200), abs)
+
+        Function f and g have the same relation, however different domains. Function h is an example to use
+        in-build function definitions.
+
+        :param domain: list of points where the function is defined
+        :param function_callable: callable function to evaluate this Function.
+        """
         self._dom = numpy.array(domain)
 
         if not callable(function_callable):
@@ -15,27 +61,97 @@ class Function(object):
 
         self._f = function_callable
 
-    def shift(self, offset, domain=False):
-        f = self._f
-        self._f = lambda x: f(x - offset)
+    def copy(self):
+        """
+        Copies and returns the copied function
+        :return:
+        """
+        return Function(self._dom, self._f)
 
+    def reinterpolate(self):
+        """
+        Uses the internal callable function, to interpolate it on the given domain.
+
+        Useful after applying different functions to it, to increase the performance.
+
+        :return:
+        """
+        self._f = to_function(self._dom, self._f)
+
+    def shift(self, offset, domain=False):
+        """
+        Shifts the function to the right by offset.
+
+        If domain is True, it additionally shifts the domain.
+
+        :param offset:
+        :param domain:
+        :return:
+        """
+        f = self._f
+
+        dom = self._dom
         if domain is True:
-            self._dom = self._dom + offset
+            dom = self._dom + offset
+
+        return Function(dom, lambda x: f(x - offset))
+
+    def apply(self, function):
+        """
+        Applies a function to Function. (Composition).
+
+        In mathematical terms, let g be function, and f being the called Function. Then this method computes
+        f.apply(g)(x) = g(f(x))
+
+        :Example:
+        >>> f = Function()
+        >>> g = lambda x...
+        >>> f.apply(g) # g(f(x))
+
+        :param function: Callable function
+        :return:
+        """
+
+        f = self._f
+        return Function(self._dom, lambda x: function(f(x)))
+
+    def composeWith(self, function):
+        """
+        Composition of two functions, similar to apply. However, the composition is the other way round.
+
+        In mathematical terms, let g be function, and f being the called Function. Then this method computes
+        f.composeWith(g) = f(g(x))
+
+        :Example:
+        >>> f = Function()
+        >>> g = lambda x:
+        >>> f.composeWith(g) # f(g(x))
+        :param function:
+        :return:
+        """
+
+        f = self._f
+        return Function(self._dom, lambda x: f(function(x)))
+
+    def conj(self):
+        """
+        Computes the complex conjugate and returns it.
+        :return:
+        """
+        return self.apply(numpy.conj)
+
+    def abs(self):
+        """
+        Computes the absolute value and returns it.
+        :return:
+        """
+        return self.apply(abs)
 
     def get_domain(self):
         return self._dom
 
-    def extend_domain(self, dx_steps=1):
-        domain = self.get_domain()
-        dx = self.get_dx(domain)
-
-        pre = -dx * numpy.array(range(dx_steps, 0, -1)) + domain[0]
-        post = dx * numpy.array(range(1, dx_steps + 1, 1)) + domain[-1]
-
-        new_domain = numpy.append(pre, domain)
-        new_domain = numpy.append(new_domain, post)
-
-        self._dom = new_domain
+    def eval(self):
+        return self(self.get_domain())
 
     @classmethod
     def get_dx(cls, domain):
@@ -54,19 +170,42 @@ class Function(object):
     def to_function(cls, domain, feval):
         return cls(domain, to_function(domain, feval))
 
-    def remesh(self, new_mesh, return_function=False):
-        f = to_function(new_mesh, self._f(new_mesh))
-        dom = new_mesh
+    def remesh(self, new_mesh):
+        """
+        Remeshes the function using the new_mesh.
 
-        if not return_function:
-            self._f = f
-            self._dom = dom
-        else:
-            return Function(dom, f)
+        :param new_mesh:
+        :return:
+        """
+        return Function(new_mesh, to_function(new_mesh, self._f(new_mesh)))
+
+    def vremesh(self, iterable, *selectors, dstart=0, dstop=0):
+        """
+        Remeshes the grid/domain using vslice.
+
+        Particularly useful if you want to restrict you function
+
+        :Example:
+        >>> f = Function(np.linspace(-1, 1, 100), numpy.sin)
+        >>> g = f.vremesh((-0.1, 0.1)) # == Function(np.linspace(-0.1, 0.1, 10), numpy.sin)
+
+        >>> h = f.vremesh((-1.0, -0.1), (0.1, 1.0)) # remeshes the function on ([-1, -0.1] union [0.1, 1.0])
+        >>> f == g + h
+        :param iterable:
+        :param selectors:
+        :param dstart:
+        :param dstop:
+        :return:
+        """
+
+        return self.remesh(vslice(iterable, selectors, dstart=dstart, dstop=dstop))
 
     @classmethod
     def from_function(cls, fun: 'Function'):
         return cls.to_function(fun.get_domain(), fun.get_function())
+
+    def add(self, other):
+        return self.__add__(other)
 
     def __add__(self, other):
         if isinstance(other, Function):
@@ -79,6 +218,12 @@ class Function(object):
             return Function(self._dom, lambda x: self._f(x) - other.get_function()(x))
         if isinstance(other, int) or isinstance(other, float):
             return Function(self._dom, lambda x: self._f(x) - other)
+
+    def __pow__(self, power):
+        if isinstance(power, Function):
+            return Function(self._dom, lambda x: self._f(x) ** power.get_function()(x))
+        if isinstance(power, int) or isinstance(power, float):
+            return Function(self._dom, lambda x: self._f(x) ** power)
 
     def __mul__(self, other):
         if isinstance(other, Function):
@@ -339,7 +484,8 @@ def invfourier_matrix(f_space, t_space):
 
     with R, V being the reflection and potential function, respectively.
 
-    :param f_space: frequency space. The space where the function to do the inverse fourier transform is known
+    :param f_space: frequency space. The space where the function to do the inverse fourier transform is
+    known. Has to be equidistantly spaced.
     :param t_space: time space. The space where the inverse fourier transform shall be evaluated.
     :return: A matrix representing the inverse fourier transform
     :raises:

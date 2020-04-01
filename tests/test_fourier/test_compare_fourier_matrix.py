@@ -55,4 +55,3 @@ def test_compare_InverseFourier_matrix():
     fun2 = Function.to_function(w_space, np.dot(trafo, f(x_space)))
     
     assert_equal(fun, fun2, 1e-15)
-

@@ -12,7 +12,7 @@ import time
 
 print(time.ctime())
 
-potential = shift_potential(load_potential("initial.dat"), 40)
+potential = shift_potential(load_potential("simulation.profile"), 40)
 
 length = 3000
 thickness = 400

@@ -13,13 +13,15 @@ from dinv.function import Function, invfourier_matrix, InverseFourierTransform
 
 
 class GeneralFourierTransform(object):
-    """
+    r"""
     Compute the fourier transform (and its inverse) of a callable function f
 
     The fourier transform is calculated via
+    ..math::
         F(f)(w) := \int_{-\infty}^{\infty}{f(k) \exp{-ikw} \mathrm d k}
 
     and the inverse transform is calculated via
+    ..math::
         F^{-1}(f)(w) := \frac{1}{2\pi} \int_{-\infty}^{\infty}{f(k) \exp{ikw} \mathrm d k}
 
     There are no restrictions on the function f. Together with the function_support_range
@@ -94,13 +96,13 @@ class GeneralFourierTransform(object):
 
 class FourierTransform(object):
     def __init__(self, k_range, real_part, imaginary_part=None, offset=0, cache=None):
-        """
+        r"""
         Calculates the continuous fourier transform F(f)(w)
 
 
         The following fourier transform definition is used:
-
-            F(f)(w) := \frac{1}{2\pi} \int_{-\infty}^{\infty}{f(k) \exp{-ikw} \mathrm d k}
+        ..math::
+            F[f](w) := \frac{1}{2\pi} \\int_{-\infty}^{\infty}{f(k) \exp{-ikw} dk}
 
         Or more readable:
                                     -- oo
@@ -227,7 +229,7 @@ class FourierTransform(object):
 
 
 class UpdateableFourierTransform(FourierTransform):
-    """
+    r"""
     Puts two 'partial' fourier transforms into one.
 
     Since the fourier transform is linear, we can split up the fourier transform into two
@@ -240,8 +242,8 @@ class UpdateableFourierTransform(FourierTransform):
     We assume, the function value does only change f1, i.e. the lower part of the function.
     f2 stays fixed:
     So we save the computation of the second part, if only f1 changes:
-
-    F[f](x) = \int_{0}^{k} f1(w) exp(-iwx) dx +  \int_{k}^{\infty} f2(w) exp(-iwx) dx
+    ..math::
+        F[f](x) = \int_{0}^{k} f1(w) exp(-iwx) dx +  \int_{k}^{\infty} f2(w) exp(-iwx) dx
     """
 
     def __init__(self, f1, f2):
@@ -324,7 +326,6 @@ def smooth(f, support, spacing, sigma=1.0):
     conv = numpy.convolve(feval, gaussian_kernel, mode='same') * spacing
     return scipy.interpolate.interp1d(eval_space, conv, bounds_error=False, fill_value=0)
 
-
 class FourierExtrapolation(object):
     def __init__(self, fourier: Function, constraint: Function):
         self._f = fourier
@@ -350,43 +351,77 @@ class FourierExtrapolation(object):
         return f_extrapolate
     """
 
-    def extrapolate(self, w_space: numpy.ndarray, constraint_space=None):
+    def extrapolate(self, w_space: numpy.ndarray, constraint_space=None, f_exact=None):
         if constraint_space is None:
             constraint_space = self._constrain.get_domain()
 
         # Remove duplicates, usually this happens only at the interfaces of the domains...
         # and thus we only check it for the first element
-        if w_space[0] in self._f.get_domain():
-            w_space = w_space[1:]
+        #if w_space[0] in self._f.get_domain():
+        #    w_space = w_space[1:]
 
 
         # make the frequency space symmetric
         w_spaces = [- numpy.flip(w_space), w_space]
-        mfull = numpy.concatenate([invfourier_matrix(space, constraint_space) for space in w_spaces], axis=1)
+        #mfull = numpy.concatenate([invfourier_matrix(space, constraint_space) for space in w_spaces], axis=1)
+        mfull = invfourier_matrix(w_space, constraint_space)
+        #mfull = numpy.concatenate([numpy.conj(numpy.flip(mfull, axis=1)), mfull], axis=1)
+        #mfull = numpy.concatenate([numpy.conj(mfull), mfull], axis=1)
+        w_spaces = [w_space]
 
-        print("Shape inversion matrix: {}".format(mfull.shape))
+
+        print(f"Shape inversion matrix: {mfull.shape}")
         actual = InverseFourierTransform.from_function(constraint_space, self._f)(constraint_space)
         target = self._constrain(constraint_space)
 
-        b = target - actual
-        f_extrapolate, residuals, rank, s = numpy.linalg.lstsq(mfull, b, rcond=1e-8)
+        b = (target - actual) / 2
+        f_extrapolate, residuals, rank, s = scipy.linalg.lstsq(mfull, b, cond=1e-5)
 
-        print("Rank inversion matrix: {}".format(rank))
+
+        error = numpy.sum(numpy.abs(numpy.dot(mfull, f_extrapolate) - b))
+        error_exact = 0
+        if f_exact is not None:
+            error_exact = numpy.sum(numpy.abs(numpy.dot(mfull, f_exact(w_space)) - b))
+            pylab.show()
+            #pylab.plot(constraint_space, numpy.dot(mfull, f_exact(w_space)))
+            InverseFourierTransform.to_function(w_space, f_exact, constraint_space).plot()
+            pylab.plot(constraint_space, b)
+            pylab.show()
+
+
+        """if f_exact is not None:
+            pylab.show()
+            pylab.plot(constraint_space, numpy.dot(-invfourier_matrix(self._f.get_domain(), constraint_space), self._f(self._f.get_domain())))
+            pylab.plot(constraint_space, 2*numpy.dot(mfull, f_exact(w_space)))
+            pylab.show()
+            error_exact = numpy.sum(numpy.abs(numpy.dot(mfull, f_exact(w_space)) - target))
+            print(f"Exact error: {error_exact}")
+        """
+
+        print(f"Rank inversion matrix: {rank}")
+        print(f"Error in inversion: {error}")
+        print(f"Error in inversion: exact {error_exact}")
+
 
         f_lower = f_extrapolate[0:len(w_space)]
         f_upper = f_extrapolate[len(w_space):]
 
-        # Take the arithmetic average of upper and lower,
-        # note that since the reflection is "Hermitian", we have conj(f_lower(-w)) = f_upper(w)
-        f_upper = 0.5 * (numpy.conj(numpy.flip(f_lower)) + f_upper)
+        if len(f_upper) == 0:
+            # This case happens if we do not consider the negative side of the w_space.
+            f_upper = f_lower
+        else:
+            # Take the arithmetic average of upper and lower,
+            # note that since the reflection is "Hermitian", we have conj(f_lower(-w)) = f_upper(w)
+            #f_upper = 0.5 * (numpy.conj(numpy.flip(f_lower)) + f_upper)
+            f_upper = 0.5 * (numpy.conj(f_lower) + f_upper)
 
         return w_space, f_upper
 
-    def extrapolate_function(self, w_space, constraint_space=None):
+    def extrapolate_function(self, w_space, constraint_space=None, f_exact=None):
 
-        print("Extrapolating from w0 = {} to wn = {}".format(w_space[0], w_space[-1]))
+        print(f"Extrapolating from w0 = {w_space[0]:e} to wn = {w_space[-1]:e}")
 
-        w_space, f_new = self.extrapolate(w_space, constraint_space)
+        w_space, f_new = self.extrapolate(w_space, constraint_space, f_exact)
 
         w_space_new = numpy.concatenate([-numpy.flip(w_space), self._f.get_domain(), w_space])
         feval = numpy.concatenate([numpy.conj(numpy.flip(f_new)), self._f(self._f.get_domain()), f_new])
@@ -415,7 +450,7 @@ class FourierExtrapolation(object):
             constraint_space = self._constrain.get_domain()
 
         self._mfull = invfourier_matrix(w_space, constraint_space)
-
+        self.w_space = w_space
         actual = InverseFourierTransform.from_function(constraint_space, self._f)(constraint_space)
         target = self._constrain(constraint_space)
         self._b = target - actual
@@ -423,3 +458,9 @@ class FourierExtrapolation(object):
 
     def minimize(self, fourier: numpy.ndarray):
         return numpy.sum(numpy.abs(numpy.dot(self._mfull, fourier) - self._b))
+
+    def minimize_func(self, func: Function):
+        try:
+            return self.minimize(func(self.w_space))
+        except ValueError:
+            raise RuntimeError("init has to be called before applying minimize_func")

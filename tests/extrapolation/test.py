@@ -16,10 +16,10 @@ q_extrapolation = 0.6
 
 x_space = linspace(0, thickness + shift, 10*(thickness + shift) + 1)
 k_space = linspace(0, q_max / 2, int(1000 * q_max) + 1)
-k_extrapolation_space = linspace(q_max / 2, q_extrapolation, (q_extrapolation - q_max) * 1000 + 1)
+k_extrapolation_space = linspace(q_max / 2, q_extrapolation, int((q_extrapolation - q_max) * 1000 + 1))
 
 
-potential = load_potential("profile.dat")
+potential = load_potential("simulation.profile")
 potential = shift_potential(potential, shift)
 
 
