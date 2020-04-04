@@ -35,8 +35,8 @@ def test_splitting_inverse_fourier():
 
     F = FourierTransform.from_function(w_space, f)
 
-    F1 = F.remesh(w_space[ind1], True)
-    F2 = F.remesh(w_space[ind2], True)
+    F1 = F.remesh(w_space[ind1])
+    F2 = F.remesh(w_space[ind2])
 
     f1 = InverseFourierTransform.from_function(x_space, F1)
     f2 = InverseFourierTransform.from_function(x_space, F2)

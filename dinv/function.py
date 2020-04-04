@@ -4,6 +4,7 @@ import scipy.interpolate
 from scipy.integrate import trapz
 from dinv.util import vslice
 
+
 class Function(object):
     """
     A mathematical function
@@ -147,6 +148,34 @@ class Function(object):
         """
         return self.apply(abs)
 
+    def max(self):
+        """
+        Computes the maximum value and returns it.
+        :return:
+        """
+        return numpy.max(self.eval())
+
+    def min(self):
+        """
+        Computes the minimum value and returns it.
+        :return:
+        """
+        return numpy.min(self.eval())
+
+    def argmax(self):
+        """
+        Computes the argument which attains the maximum value
+        :return:
+        """
+        return self.get_domain()[numpy.argmax(self.eval())]
+
+    def argmin(self):
+        """
+        Computes the argument which attains the minimum value
+        :return:
+        """
+        return self.get_domain()[numpy.argmin(self.eval())]
+
     def get_domain(self):
         return self._dom
 
@@ -179,7 +208,7 @@ class Function(object):
         """
         return Function(new_mesh, to_function(new_mesh, self._f(new_mesh)))
 
-    def vremesh(self, iterable, *selectors, dstart=0, dstop=0):
+    def vremesh(self, *selectors, dstart=0, dstop=0):
         """
         Remeshes the grid/domain using vslice.
 
@@ -198,7 +227,7 @@ class Function(object):
         :return:
         """
 
-        return self.remesh(vslice(iterable, selectors, dstart=dstart, dstop=dstop))
+        return self.remesh(vslice(self.get_domain(), *selectors, dstart=dstart, dstop=dstop))
 
     @classmethod
     def from_function(cls, fun: 'Function'):
@@ -207,35 +236,46 @@ class Function(object):
     def add(self, other):
         return self.__add__(other)
 
+    @staticmethod
+    def _is_number(other):
+        return (isinstance(other, int) or
+                isinstance(other, float) or
+                isinstance(other, numpy.complex)
+                or isinstance(other, numpy.float))
+
     def __add__(self, other):
         if isinstance(other, Function):
             return Function(self._dom, lambda x: self._f(x) + other.get_function()(x))
-        if isinstance(other, int) or isinstance(other, float):
+        if self._is_number(other):
             return Function(self._dom, lambda x: self._f(x) + other)
 
     def __sub__(self, other):
         if isinstance(other, Function):
             return Function(self._dom, lambda x: self._f(x) - other.get_function()(x))
-        if isinstance(other, int) or isinstance(other, float):
+        if self._is_number(other):
             return Function(self._dom, lambda x: self._f(x) - other)
 
     def __pow__(self, power):
         if isinstance(power, Function):
             return Function(self._dom, lambda x: self._f(x) ** power.get_function()(x))
-        if isinstance(power, int) or isinstance(power, float):
+        if self._is_number(power):
             return Function(self._dom, lambda x: self._f(x) ** power)
 
     def __mul__(self, other):
         if isinstance(other, Function):
             return Function(self._dom, lambda x: self._f(x) * other.get_function()(x))
-        if isinstance(other, int) or isinstance(other, float):
+        if self._is_number(other):
             return Function(self._dom, lambda x: self._f(x) * other)
 
     def __truediv__(self, other):
         if isinstance(other, Function):
             return Function(self._dom, lambda x: self._f(x) / other.get_function()(x))
-        if isinstance(other, int) or isinstance(other, float):
+        if self._is_number(other):
             return Function(self._dom, lambda x: self._f(x) / other)
+
+    def __neg__(self):
+        f = self._f
+        return Function(self._dom, lambda x: -f(x))
 
     def plot(self, plot_space=None, show=False, real=True, **kwargs):
         import pylab
@@ -291,13 +331,35 @@ class Function(object):
 
 class Antiderivative(Function):
     @classmethod
-    def to_function(cls, domain, feval):
+    def to_function(cls, domain, feval, C=0):
+        r"""
+        Returns the integral starting from the first element of domain, i.e.
+        ::math..
+            F(x) = \int_{x0}^{x} f(z) dz
+
+        where x0 = domain[0] and f is the given function (feval).
+        :param domain:
+        :param feval:
+        :return:
+        """
         # TODO: test
         dx = cls.get_dx(domain)
         feval = evaluate(domain, feval)
+
+        Feval = scipy.integrate.cumtrapz(y=feval, dx=dx, initial=0) + C
+
         # not the most efficient way, but it's ok ...
-        Feval = numpy.array([trapz(feval[0:idx], dx=dx) for idx in range(0, len(feval))])
+        # Feval = numpy.array([trapz(feval[0:idx], dx=dx) for idx in range(0, len(feval))])
         return Function.to_function(domain, Feval)
+
+    @classmethod
+    def from_function(cls, fun: Function, x0=None, C=0):
+        if x0 is None:
+            return cls.to_function(fun.get_domain(), fun, C=C)
+        else:
+            F = cls.from_function(fun)
+            return F - F(x0)
+
 
 
 class Derivative(Function):
@@ -308,6 +370,10 @@ class Derivative(Function):
         dx = cls.get_dx(domain)
         fprime = numpy.gradient(feval, dx, edge_order=2)
         return Function.to_function(domain, fprime)
+
+    @classmethod
+    def from_function(cls, fun: Function):
+        return cls.to_function(fun.get_domain(), fun)
 
 
 class FourierTransform(Function):
@@ -322,7 +388,6 @@ class FourierTransform(Function):
 
     @classmethod
     def from_function(cls, frequency_domain, fun: Function):
-        # fun.extend_domain()
         return cls.to_function(fun.get_domain(), fun.get_function(), frequency_domain)
 
 
@@ -338,7 +403,6 @@ class InverseFourierTransform(Function):
 
     @classmethod
     def from_function(cls, x_domain, fun: Function):
-        # fun.extend_domain()
         return cls.to_function(fun.get_domain(), fun.get_function(), x_domain)
 
 

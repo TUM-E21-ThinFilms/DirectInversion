@@ -40,16 +40,16 @@ def _vslice(array, selector, dstart=0, dstop=0):
         if len(selector) == 3:
             steps = selector[2]
     if start is not None:
-        ind_start = numpy.argmin(array < start) + dstart
+        ind_start = numpy.argmin(array <= start) + dstart
     else:
         ind_start = 0
 
     if stop is not None:
         ind_stop = numpy.argmax(array > stop) + dstop
         if ind_stop == 0:
-            ind_stop = -1
+            ind_stop = None
     else:
-        ind_stop = -1
+        ind_stop = None
 
     if steps is None:
         steps = 1
