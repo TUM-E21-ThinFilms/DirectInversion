@@ -1,6 +1,7 @@
-import numpy
+import numpy as np
 
 from dinv.function import Function, FourierTransform
+from ..helper import assert_equal
 
 
 def rect(x):
@@ -16,27 +17,41 @@ def sinc(x):
     if x == 0:
         return 1.0
 
-    return numpy.sin(numpy.pi * x) / (numpy.pi * x)
+    return np.sin(np.pi * x) / (np.pi * x)
 
 
 def test_gauss():
-    domain = numpy.linspace(-1, 1, 10000)
-    f = Function.to_function(domain, lambda x: rect(1 / (2 * numpy.pi) * x))
+    domain = np.linspace(-1, 1, 10000)
+    f = Function.to_function(domain, lambda x: rect(1 / (2 * np.pi) * x))
 
-    freq_dom = numpy.linspace(-20, 20, 1000)
+    freq_dom = np.linspace(-20, 20, 1000)
 
     F = FourierTransform.from_function(freq_dom, f)
 
-    fourier_trafo = lambda x: 2 * sinc(x / numpy.pi)
+    fourier_trafo = Function(domain, lambda x: 2 * sinc(x / np.pi))
 
-    """
-    import pylab
-    pylab.plot(freq_dom, F(freq_dom))
-    pylab.plot(freq_dom, [fourier_trafo(w) for w in freq_dom])
-    pylab.show()
-    """
+    assert_equal(F, fourier_trafo, TOL=1e-6)
 
-    TOL = 1e-6
 
-    for w in freq_dom:
-        assert abs(fourier_trafo(w) - F(w)) <= TOL
+def test_exp():
+    domain = np.linspace(-5, 5, 100)
+    w_space = np.linspace(-10, 10, 1000)
+    a = 2
+
+    f = Function.to_function(domain, lambda x: np.exp(-a * x ** 2))
+    F_analytical = Function.to_function(w_space, lambda x: np.sqrt(np.pi / a) * np.exp(-x ** 2 / (4 * a)))
+    F = FourierTransform.from_function(w_space, f)
+
+    assert_equal(F, F_analytical)
+
+
+def test_exp_random_domain():
+    np.random.seed(10)
+    domain = np.unique(10 * np.random.random(10000) - 5)
+    w_space = np.linspace(-10, 10, 1000)
+    a = 2
+    f = Function.to_function(domain, lambda x: np.exp(-a * x ** 2))
+    F_analytical = Function.to_function(w_space, lambda x: np.sqrt(np.pi / a) * np.exp(-x ** 2 / (4 * a)))
+    F = FourierTransform.from_function(w_space, f)
+
+    assert_equal(F, F_analytical, TOL=7e-6)

@@ -4,6 +4,8 @@ import scipy.interpolate
 from scipy.integrate import trapz
 from dinv.util import vslice
 
+FUNCTION_INTERPOLATION_TYPE = 'linear'
+
 
 class Function(object):
     """
@@ -49,9 +51,12 @@ class Function(object):
         Function f and g have the same relation, however different domains. Function h is an example to use
         in-build function definitions.
 
-        :param domain: list of points where the function is defined
+        :param domain: list of points where the function is defined, equidistantly spaced!
         :param function_callable: callable function to evaluate this Function.
         """
+        if not is_evenly_spaced_domain(self._dom):
+            raise RuntimeWarning("Given domain is not equidistantly spaced")
+
         self._dom = numpy.array(domain)
 
         if not callable(function_callable):
@@ -89,12 +94,11 @@ class Function(object):
         :param domain:
         :return:
         """
-        f = self._f
-
         dom = self._dom
         if domain is True:
             dom = self._dom + offset
 
+        f = self._f
         return Function(dom, lambda x: f(x - offset))
 
     def apply(self, function):
@@ -148,6 +152,20 @@ class Function(object):
         """
         return self.apply(abs)
 
+    def log(self):
+        """
+        Computes the natural logarithm and returns it.
+        :return:
+        """
+        return self.apply(numpy.log)
+
+    def log10(self):
+        """
+        Computes the logarithm (base 10) and returns it.
+        :return:
+        """
+        return self.apply(numpy.log10)
+
     def max(self):
         """
         Computes the maximum value and returns it.
@@ -186,6 +204,7 @@ class Function(object):
     def get_dx(cls, domain):
         if len(domain) < 2:
             return 0
+
         # Assuming equidistantly spaced domain
         return domain[1] - domain[0]
 
@@ -215,12 +234,16 @@ class Function(object):
         Particularly useful if you want to restrict you function
 
         :Example:
+        >>> f.vremesh((None, None)) # does nothing in principle
+        >>> f.vremesh((0, None)) # remeshes from 0 to the end of domain
+        >>> f.vremesh((None, 0)) # remeshes from the start of the domain till 0
+
         >>> f = Function(np.linspace(-1, 1, 100), numpy.sin)
         >>> g = f.vremesh((-0.1, 0.1)) # == Function(np.linspace(-0.1, 0.1, 10), numpy.sin)
 
         >>> h = f.vremesh((-1.0, -0.1), (0.1, 1.0)) # remeshes the function on ([-1, -0.1] union [0.1, 1.0])
         >>> f == g + h
-        :param iterable:
+
         :param selectors:
         :param dstart:
         :param dstop:
@@ -333,7 +356,7 @@ class Antiderivative(Function):
     @classmethod
     def to_function(cls, domain, feval, C=0):
         r"""
-        Returns the integral starting from the first element of domain, i.e.
+        Returns the integral function starting from the first element of domain, i.e.
         ::math..
             F(x) = \int_{x0}^{x} f(z) dz
 
@@ -344,12 +367,8 @@ class Antiderivative(Function):
         """
         # TODO: test
         dx = cls.get_dx(domain)
-        feval = evaluate(domain, feval)
+        Feval = scipy.integrate.cumtrapz(y=evaluate(domain, feval), dx=dx, initial=0) + C
 
-        Feval = scipy.integrate.cumtrapz(y=feval, dx=dx, initial=0) + C
-
-        # not the most efficient way, but it's ok ...
-        # Feval = numpy.array([trapz(feval[0:idx], dx=dx) for idx in range(0, len(feval))])
         return Function.to_function(domain, Feval)
 
     @classmethod
@@ -360,6 +379,30 @@ class Antiderivative(Function):
             F = cls.from_function(fun)
             return F - F(x0)
 
+    @classmethod
+    def integral(cls, fun: Function, x0=None, x1=None):
+        r"""
+        Calculates the definite integral of the Function fun.
+
+        If x0 or x1 are given, the function is re-meshed at these points, and thus this function returns
+        ::math..
+            \int_{x_0}^{x_1} f(x) dx
+
+        If x0 and x1 are both None, the integral is evaluated over the whole domain
+        x0, x1 = domain[0], domain[-1], i.e.
+        ::math..
+            \int_{x_0}^{x_1} f(x) dx = \int f(x) dx
+
+        :param fun:
+        :param x0: lower bound of the integral limit or None
+        :param x1: upper bound of the integral limit or None
+        :return: definite integral value (Not a function!)
+        """
+        if not any(numpy.array([x0, x1]) is None):
+            fun = fun.vremesh((x0, x1))
+
+        dx = cls.get_dx(fun.get_domain())
+        return scipy.integrate.trapz(fun.eval(), dx=dx)
 
 
 class Derivative(Function):
@@ -367,24 +410,30 @@ class Derivative(Function):
     def to_function(cls, domain, feval):
         # TODO: test
         feval = evaluate(domain, feval)
-        dx = cls.get_dx(domain)
-        fprime = numpy.gradient(feval, dx, edge_order=2)
+        fprime = numpy.gradient(feval, cls.get_dx(domain), edge_order=2)
         return Function.to_function(domain, fprime)
 
     @classmethod
     def from_function(cls, fun: Function):
         return cls.to_function(fun.get_domain(), fun)
 
-
 class FourierTransform(Function):
     @classmethod
     def to_function(cls, domain, feval, frequency_domain):
-        dx = cls.get_dx(domain)
         w = numpy.array(frequency_domain).reshape((len(frequency_domain), 1))
         domain = numpy.array(domain).reshape((1, len(domain)))
         feval = evaluate(domain, feval)
-        F = trapz(feval * numpy.exp(- 1j * numpy.dot(w, domain)), dx=dx)
+        F = trapz(feval * numpy.exp(- 1j * numpy.dot(w, domain)), x=domain)
         return Function.to_function(frequency_domain, F)
+
+        """
+            dx = cls.get_dx(domain)
+            w = numpy.array(frequency_domain).reshape((len(frequency_domain), 1))
+            domain = numpy.array(domain).reshape((1, len(domain)))
+            feval = evaluate(domain, feval)
+            F = trapz(feval * numpy.exp(- 1j * numpy.dot(w, domain)), dx=dx)
+            return Function.to_function(frequency_domain, F)
+        """
 
     @classmethod
     def from_function(cls, frequency_domain, fun: Function):
@@ -445,6 +494,13 @@ class AbstractConvolution(Function):
 class GaussianSmoothing(AbstractConvolution):
     @classmethod
     def get_kernel(cls, fun: Function, **kwargs):
+        """
+        Returns the gaussian kernel, centered at \mu = 0 and variance = sigma
+
+        :param fun: Function to apply the gaussian kernel (needed for spacing purposes)
+        :param kwargs: possible variable: sigma
+        :return:
+        """
         sigma = kwargs.get('sigma', 1.0)
         spacing = fun.get_dx(fun.get_domain())
         width = numpy.arange(-5 * sigma, 5 * sigma, spacing)
@@ -453,18 +509,61 @@ class GaussianSmoothing(AbstractConvolution):
         return kernel
 
 
-def evaluate(x_space, function):
+def evaluate(domain, function):
+    """
+    Evaluates a function on its domain.
+    If function is callable, it's simply evaluated using the callable
+    If function is a numpy array, then its simply returned (assuming it was already evaluated elsewhere)
+    Otherwise a RuntimeError is raised
+    :param domain: numpy.array
+    :param function: callable/np.array
+    :raise RuntimeError: Unknown type of function given
+    :return:
+    """
     if callable(function):
-        return numpy.array([function(x) for x in x_space])
-    elif isinstance(function, numpy.ndarray) and len(x_space) == len(function):
+        return numpy.array([function(x) for x in domain])
+    elif isinstance(function, numpy.ndarray) and len(domain) == len(function):
         return function
-    elif isinstance(function, list) and len(x_space) == len(function):
+    elif isinstance(function, list) and len(domain) == len(function):
         return numpy.array(function)
     else:
         raise RuntimeError("Cannot evaluate, unknown type")
 
 
-def to_function(x_space, feval, interpolation='linear', to_zero=True):
+def set_interpolation_type(interpolation_type):
+    """
+    Sets the interpolation type used for all Functions
+
+    :param interpolation_type: "linear", "cubic", "quadratic", etc.. see scipy.interpolation.interp1d
+    :return: previous interpolation type
+    """
+    global FUNCTION_INTERPOLATION_TYPE
+    previous_type = FUNCTION_INTERPOLATION_TYPE
+    FUNCTION_INTERPOLATION_TYPE = interpolation_type
+    return previous_type
+
+
+def is_evenly_spaced_domain(domain):
+    """
+    Checks whether the given domain (list) is evenly (equdistantly) spcaed
+
+    :param domain: numpy.array. domain to check
+    :return: boolean
+    """
+
+    diff = numpy.diff(domain)
+
+    if numpy.all(numpy.isclose(diff - diff[0], numpy.zeros(len(diff)))):
+        return True
+
+    return False
+
+
+def to_function(x_space, feval, interpolation=None, to_zero=True):
+    if interpolation is None:
+        global FUNCTION_INTERPOLATION_TYPE
+        interpolation = FUNCTION_INTERPOLATION_TYPE
+
     if callable(feval):
         feval = numpy.array([feval(x) for x in x_space])
 
