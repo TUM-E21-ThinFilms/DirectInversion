@@ -2,11 +2,13 @@ import numpy
 import scipy.interpolate
 import pylab
 
+from skipi.function import Function, NullFunction
+
 from numpy import array
 from dinv.glm import ReflectivityAmplitudeInterpolation, ReflectionCalculation, \
     PotentialReconstruction
 from dinv.fourier import UpdateableFourierTransform, FourierTransform
-from dinv.function import Function
+
 
 def load_potential(file, as_function=False):
     """
@@ -21,7 +23,7 @@ def load_potential(file, as_function=False):
     potential[1] = 1e-6 * numpy.flip(potential[1])
     # potential[1] *= 1e-6
     fun = scipy.interpolate.interp1d(potential[0], potential[1], fill_value=(0, 0),
-                                      bounds_error=False, kind='linear')
+                                     bounds_error=False, kind='linear')
     if as_function:
         return Function(potential[0], fun)
     else:
@@ -56,6 +58,7 @@ def load_potential_bumps(file, spin_state='up'):
 
     return scipy.interpolate.interp1d(z, V, fill_value=(0, 0), bounds_error=False,
                                       kind='linear')
+
 
 def shift_potential(potential, offset):
     """
@@ -132,6 +135,8 @@ class TestRun(object):
         # TODO: also only use the imaginary part?
         self.use_only_real_part = False
 
+        # Plot anything? If None, this will be True if any of the plot_* attributes is True
+        self.plot = True
         # Plot the potential?
         self.plot_potential = True
         # Plot the reflectivity amplitude?
@@ -144,11 +149,15 @@ class TestRun(object):
         self.plot_reflection = False
         # Plot not every iteration, but every n-th
         self.plot_every_nth = 10
-        # Plot anything at all
+        # Shows the plot after the algorithm has finished
         self.show_plot = True
+
         # Store the results into this given path. If None, do not save to file.
         # Will only store every n-th iteration
         self.store_path = None
+
+        # user defined hook
+        self.hooks = []
 
         self.ideal_potential = None
         self.file = None
@@ -209,6 +218,23 @@ class TestRun(object):
         transform = FourierTransform(self.k_space, self.reflectivity.real, self.reflectivity.imag)
         potential = rec.reconstruct(transform)
 
+        ind = slice(self.start_end[1], -1)
+        i1_real = scipy.interpolate.interp1d([0, self.k_space[self.start_end[1]]], [0, 0], bounds_error=False,
+                                             fill_value=(0, 0))
+        i1_imag = scipy.interpolate.interp1d([0, self.k_space[self.start_end[1]]],
+                                             [0, 0],
+                                             bounds_error=False, fill_value=(0, 0))
+        i2_real = scipy.interpolate.interp1d(self.k_space[ind], self.reflectivity.real[ind],
+                                             bounds_error=False, fill_value=(0, 0))
+        i2_imag = scipy.interpolate.interp1d(self.k_space[ind], self.reflectivity.imag[ind],
+                                             bounds_error=False, fill_value=(0, 0))
+
+        refl_ipd_real = lambda x: i2_real(x) + i1_real(x)
+        refl_ipd_imag = lambda x: i2_imag(x) + i1_imag(x)
+
+        trans = FourierTransform(self.k_space, refl_ipd_real(self.k_space), refl_ipd_imag(self.k_space))
+        init_potential = rec.reconstruct(trans)
+
         if self.plot_potential:
             # cosine transform doesnt use imaginary part of the reflectivity amplitude
             # transform.method = transform.cosine_transform
@@ -221,12 +247,15 @@ class TestRun(object):
             self.store_data(zip(self.plot_potential_space, potential(self.plot_potential_space)), 'pot_ideal',
                             'potential')
 
+            pylab.plot(self.plot_potential_space, init_potential(self.plot_potential_space), '.')
+
             pylab.plot(self.plot_potential_space,
                        self.ideal_potential(self.plot_potential_space))
             pylab.plot(self.plot_potential_space, potential(self.plot_potential_space), '-',
                        color='black')
-            pylab.ylim(-1e-6, 1e-5)
-            self.legends.append('Exact SLD')
+            # pylab.ylim(-1e-6, 1e-5)
+            self.legends.append("Initial potential")
+            self.legends.append("Exact SLD")
             self.legends.append("Reconstructed SLD (exact)")
 
         if self.plot_phase:
@@ -313,6 +342,7 @@ class TestRun(object):
                     pylab.plot(k_subspace, interpolated_reflectivity * k_subspace ** 2, '.')
 
             if self.plot_reflectivity:
+                pylab.yscale('log')
                 R = interpolator.reflcalc.refl(2 * self.k_space)
                 self.store_data(zip(2 * self.k_space, abs(R) ** 2),
                                 'refl_it_{}'.format(iteration), 'reflectivity')
@@ -325,13 +355,14 @@ class TestRun(object):
 
             self.legends.append("Iteration {}".format(iteration))
 
-        exact_real = (self.reflectivity[self.start_end[0]:self.start_end[1]]).real
-        # relative error
-        print(iteration, (interpolated_reflectivity - exact_real) / exact_real * 100)
-        refl = interpolator.reflectivity
-        exact = (self.reflectivity[self.start_end[0]:self.start_end[1]])
-        print(1.0 / len(refl) * sum(abs((refl - exact) / exact * 100)),
-              interpolator.diff)
+        if False:
+            exact_real = (self.reflectivity[self.start_end[0]:self.start_end[1]]).real
+            # relative error
+            print(iteration, (interpolated_reflectivity - exact_real) / exact_real * 100)
+            refl = interpolator.reflectivity
+            exact = (self.reflectivity[self.start_end[0]:self.start_end[1]])
+            print(1.0 / len(refl) * sum(abs((refl - exact) / exact * 100)),
+                  interpolator.diff)
 
     def store_data(self, X, filename, header=[]):
         if self.store_path is None:
@@ -355,7 +386,8 @@ class TestRun(object):
         # Zeroth iteration reconstruction, just for having an "initial" potential and phase
         # Note that the phase is just completely zero below the critical edge (or whatever you set it to)
         if self.plot_potential:
-            rec = PotentialReconstruction(self.thickness + self.offset, self.precision, cutoff=self.pot_cutoff)
+            rec = PotentialReconstruction(self.thickness + self.offset, self.precision,
+                                          cutoff=self.pot_cutoff)
 
             transform = FourierTransform(self.k_space, self.real, self.imag)
             potential = rec.reconstruct(transform)
@@ -409,10 +441,12 @@ class TestRun(object):
         interpolation = ReflectivityAmplitudeInterpolation(transform,
                                                            self.k_interpolation_range, rec,
                                                            reflcalc, constrain)
-
-        interpolation.set_hook(self._plot_hook)
+        if self.plot:
+            interpolation.add_hook(self._plot_hook)
         if self.diagnostic_session:
-            interpolation.set_hook(self._diagnostic_hook)
+            interpolation.add_hook(self._diagnostic_hook)
+        if self.hook is not None:
+            interpolation.add_hook(self.hook)
 
         solution = interpolation.interpolate(self.iterations, tolerance=self.tolerance)
 
@@ -421,3 +455,87 @@ class TestRun(object):
             pylab.show()
 
         return solution
+
+
+class DataRun(TestRun):
+    """
+    This class is a convenient interface for the retrieval of reflection data below the critical edge.
+
+    We use a similar interface as TestRun, so that you first can test whether you can reconstruct the
+    reflection with simulated data, and after that, you can easily migrate to the case with real data.
+
+    You can use some of the parameters as in TestRun, however a few are not possible anymore:
+        - q_max / k_max
+        - cutoff
+        - noise
+        - offset
+    """
+
+    def __init__(self, reflection: Function, is_k_domain=True):
+        r"""
+        Tries to retrieve the reflection R(k) below the critical edge.
+
+        Given a reflection function k -> R(k) for :math:`k \in [k_c, k_max]`, we try to compute the reflection
+        R(k) for :math:`k \in [0, k_c]` using a fixed point iteration.
+
+        The given reflection has to be equidistantly spaced (dk being constant). This will be enforced by a
+        linear interpolation anyways.
+
+        If the reflection is rather given as q -> R(q), we transform the function to k -> R(K); set
+        is_k_domain to False then.
+
+        :param reflection: Reflection function k -> R(k)
+        :param is_k_domain: If the reflection is given as q -> R(q), set this to False
+        """
+        super(DataRun, self).__init__("")
+        self.ideal_potential = NullFunction(reflection.get_domain())
+        if not is_k_domain:
+            reflection = reflection.scale_domain(0.5)
+
+        self._refl_function = reflection
+        self.noise = 0
+
+    def setup(self):
+        self.legends = []
+
+        self.plot_potential_space = numpy.linspace(0, self.thickness + self.offset,
+                                                   10 * self.precision * (self.thickness + self.offset) + 1)
+
+        self.k_space = self._refl_function.get_domain()
+        self.k_max = self._refl_function.get_domain().max()
+        self.cutoff = self._refl_function.get_domain().min()
+
+        dk = self._refl_function.get_dx(self.k_space)
+        # Extend the k_space to k=0 with dk being constant
+        self.k_space = numpy.linspace(0, self.k_max, int(self.q_precision * self.k_max / dk) + 1)
+        self.reflection_function = self._refl_function.remesh(self.k_space)
+
+        self.start_end = (0, numpy.argmax(self.k_space > self.cutoff))
+
+        self.k_interpolation_range = self.k_space[self.start_end[0]:self.start_end[1]]
+
+        self.reflcalc = ReflectionCalculation(self.ideal_potential, 0,
+                                              self.thickness + self.offset, 0.1)
+
+        self.reflectivity = self.reflection_function(self.k_space)
+
+        if self.start is None:
+            self.start = 0
+
+        self.start = array(self.start)
+
+        self.real = self.reflectivity.real
+        self.imag = self.reflectivity.imag
+
+        try:
+            self.real[self.start_end[0]:self.start_end[1]] = self.start.real
+            self.imag[self.start_end[0]:self.start_end[1]] = self.start.imag
+        except:
+            pass
+
+    def _plot_exact(self):
+        """
+        Since we do not know the exact potential/reflection, we cannot plot it ...
+        :return: None
+        """
+        pass

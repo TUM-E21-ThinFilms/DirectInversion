@@ -1,6 +1,6 @@
 from setuptools import setup, find_packages
 
-requires = ['numpy', 'scipy', 'matplotlib', 'refl1d']
+requires = ['numpy', 'scipy', 'matplotlib', 'refl1d', 'skipi']
 
 setup(
     name='dinv',

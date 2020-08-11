@@ -1,10 +1,11 @@
 import numpy
 import scipy.interpolate
 
+from skipi.function import to_function
+
 from numpy import pi
 from dinv.fourier import GeneralFourierTransform, FourierTransform
 from dinv.glm import PotentialReconstruction, ReflectionCalculation
-from dinv.function import to_function
 
 from scipy.interpolate import interp1d
 

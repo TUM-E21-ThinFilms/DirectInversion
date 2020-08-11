@@ -7,7 +7,7 @@ import scipy.interpolate
 from numpy import array, pi
 
 from dinv.fourier import FourierTransform
-from dinv.util import benchmark_start, benchmark_stop
+from skipi.util import benchmark_stop, benchmark_start
 
 
 class GLMSolver(object):
@@ -126,6 +126,8 @@ class GLMSolver(object):
             diagonal of the transpose.
         """
         A[:, -1] *= 0.5
+        # If the data quality is bad, g(0) is not necessarily zero ...
+        A[:, 0] *= 0.5
 
         A = A + numpy.identity(N + 1)
 
@@ -228,7 +230,6 @@ class PotentialReconstruction(object):
         solver = GLMSolver(fourier_transform)
 
         solver.solve_init(self._end, eps)
-        # solver.solve_init_new(self._end, eps)
 
         # in principle we're solving the diff.eq.
         #   u'' = (4*pi*rho(z) - k^2) u = (V(z) - k^2) u
@@ -240,7 +241,6 @@ class PotentialReconstruction(object):
         # pot = self._prec / (4 * pi) * 2 * numpy.diff(solver.solve_all())
 
         solution = solver.solve_all()
-        # solution = solver.solve_all_new()
 
         pot = 2 / (4 * pi) * numpy.gradient(solution, self._dx, edge_order=2)
 
@@ -248,8 +248,7 @@ class PotentialReconstruction(object):
             pot[0:self._cut] = 0
             pot[-self._cut:] = 0
 
-        potential = scipy.interpolate.interp1d(self._xspace, pot, fill_value=(0, 0),
-                                               bounds_error=False)
+        potential = scipy.interpolate.interp1d(self._xspace, pot, fill_value=(0, 0), bounds_error=False)
 
         return potential
 
@@ -295,11 +294,11 @@ class ReflectionCalculation(object):
         self._rho = None
 
     def reflectivity(self, q_space):
-        return abs(self.refl(q_space)**2)
-        #return array([abs(self.refl(q)) ** 2 for q in q_space])
+        return abs(self.refl(q_space) ** 2)
+        # return array([abs(self.refl(q)) ** 2 for q in q_space])
 
     def reflection(self, k_range):
-        return self.refl(2*k_range)
+        return self.refl(2 * k_range)
 
     def refl(self, q):
         from refl1d.reflectivity import reflectivity_amplitude
@@ -328,7 +327,6 @@ class ReflectionCalculation(object):
         else:
             refl = array([self.refl(q) for q in q_space])
 
-
         pylab.plot(q_space, refl.real, style, label='Re R')
         pylab.plot(q_space, refl.imag, style, label='Im R')
 
@@ -345,7 +343,7 @@ class ReflectionCalculation(object):
 
     def plot_refl(self, q_space, show=False):
 
-        refl = abs(self.reflection(q_space / 2)**2)
+        refl = abs(self.reflection(q_space / 2) ** 2)
 
         pylab.plot(q_space, refl)
 
@@ -391,20 +389,24 @@ class ReflectivityAmplitudeInterpolation(object):
         self._rec = potential_reconstruction
         self._constraint = constraint
         self._range = k_interpolation_range
-        self._hook = None
+        self._hooks = []
 
         self.iteration = 0
         self.potential = None
         self.reflectivity = []
         self.is_last_iteration = False
         self.reflcalc = reflection_calculation
+        self.max_iterations = 0
 
-    def set_hook(self, hook):
+    def add_hook(self, hook):
+        self._hooks.append(hook)
+
+    def set_hook(self, hooks):
         """
-        :param hook: Must be a callable function, accepting this class as its only parameter.
+        :param hook: Must be a list of callable functions, accepting this class as its only parameter.
         :return: None
         """
-        self._hook = hook
+        self._hooks = hooks
 
     @staticmethod
     def _example_constrain(potential, x_space):
@@ -427,6 +429,7 @@ class ReflectivityAmplitudeInterpolation(object):
         return scipy.interpolate.interp1d(x_space, data, fill_value=(0, 0), bounds_error=False)
 
     def interpolate(self, max_iterations, tolerance=1e-8):
+        self.max_iterations = max_iterations
         for self.iteration in range(1, max_iterations + 1):
 
             benchmark_start()
@@ -451,8 +454,8 @@ class ReflectivityAmplitudeInterpolation(object):
 
             # This now calls the hook and the calling program can now update graphs and do
             # something.
-            if self._hook is not None:
-                self._hook(self)
+            for hook in self._hooks:
+                hook(self)
 
             if self.diff < tolerance:
                 break
@@ -464,7 +467,6 @@ class ReflectivityAmplitudeExtrapolation(object):
     def __init__(self, correct_transform, reflectivity, k_extrapolation_range,
                  potential_reconstruction,
                  reflection_calculation, constraint):
-
         self.transform = correct_transform
         self.refl = reflectivity
         self.k_range = k_extrapolation_range
