@@ -4,12 +4,11 @@ import pylab
 import scipy.integrate
 import scipy.interpolate
 
-from typing import List
-
 from scipy.integrate import trapz
 from numpy import array, pi
 
-from dinv.function import Function, invfourier_matrix, InverseFourierTransform
+from skipi.function import Function
+from skipi.fourier import invfourier_matrix, InverseFourierTransform
 
 
 class GeneralFourierTransform(object):
@@ -154,6 +153,10 @@ class FourierTransform(object):
         i.e. f(k_range).real
         :param imaginary_part: The imaginary part Im f evaluated at the given k points,
         i.e. f(k_range).imag
+        :param offset: an offset in the domain, i.e. if evaluated at x0, the fourier transform at x0+offset
+        is returned.
+        :param cache: A cache dictionary, for pre-calculated values. Key is the domain; value is the function
+        evaluated at the key.
         """
 
         self._k = array(k_range)
@@ -190,6 +193,7 @@ class FourierTransform(object):
         i = values.imag
 
         old_r = list(self._r[0:len(values)])
+        old_i = list(self._i[0:len(values)])
         if len(values) == len(self._r):
             self._r = r
             self._i = i
@@ -199,12 +203,17 @@ class FourierTransform(object):
 
         self._cache = {}
 
-        # Todo: maybe include the imaginary part in diff, too?
-        return numpy.max(abs(old_r - r))
+        if self.method == self.cosine_transform:
+            return numpy.max(abs(old_r - r))
+        elif self.method == self.sine_transform:
+            return numpy.max(abs(old_i - i))
+        else:
+            return numpy.max(abs(old_r - r + 1j*(old_i - i)))
 
     def fourier_transform(self, w):
         # Note here, since k_space is positive (see 2)), the factor reduces to 2/2pi.
-        return 1 / pi * trapz((self._r + 1j * self._i) * numpy.exp(-1j * self._k * w), dx=self._k_spacing).real
+        return 1 / pi * trapz((self._r + 1j * self._i) * numpy.exp(-1j * self._k * w),
+                              dx=self._k_spacing).real
 
     def cosine_transform(self, w):
         # And again, since we have to multiply the factor with 2 again, hence 2/pi is the
@@ -236,11 +245,10 @@ class UpdateableFourierTransform(FourierTransform):
     parts.
 
     Since we're updating a function only on a subset of it's domain, it's easy to cache the
-    calculations on the subset
-    which did not change.
+    calculations on the subset which did not change.
 
     We assume, the function value does only change f1, i.e. the lower part of the function.
-    f2 stays fixed:
+    f2 stays constant.
     So we save the computation of the second part, if only f1 changes:
     ..math::
         F[f](x) = \int_{0}^{k} f1(w) exp(-iwx) dx +  \int_{k}^{\infty} f2(w) exp(-iwx) dx
@@ -326,6 +334,7 @@ def smooth(f, support, spacing, sigma=1.0):
     conv = numpy.convolve(feval, gaussian_kernel, mode='same') * spacing
     return scipy.interpolate.interp1d(eval_space, conv, bounds_error=False, fill_value=0)
 
+
 class FourierExtrapolation(object):
     def __init__(self, fourier: Function, constraint: Function):
         self._f = fourier
@@ -357,18 +366,16 @@ class FourierExtrapolation(object):
 
         # Remove duplicates, usually this happens only at the interfaces of the domains...
         # and thus we only check it for the first element
-        #if w_space[0] in self._f.get_domain():
+        # if w_space[0] in self._f.get_domain():
         #    w_space = w_space[1:]
-
 
         # make the frequency space symmetric
         w_spaces = [- numpy.flip(w_space), w_space]
-        #mfull = numpy.concatenate([invfourier_matrix(space, constraint_space) for space in w_spaces], axis=1)
+        # mfull = numpy.concatenate([invfourier_matrix(space, constraint_space) for space in w_spaces], axis=1)
         mfull = invfourier_matrix(w_space, constraint_space)
-        #mfull = numpy.concatenate([numpy.conj(numpy.flip(mfull, axis=1)), mfull], axis=1)
-        #mfull = numpy.concatenate([numpy.conj(mfull), mfull], axis=1)
+        # mfull = numpy.concatenate([numpy.conj(numpy.flip(mfull, axis=1)), mfull], axis=1)
+        # mfull = numpy.concatenate([numpy.conj(mfull), mfull], axis=1)
         w_spaces = [w_space]
-
 
         print(f"Shape inversion matrix: {mfull.shape}")
         actual = InverseFourierTransform.from_function(constraint_space, self._f)(constraint_space)
@@ -377,17 +384,15 @@ class FourierExtrapolation(object):
         b = (target - actual) / 2
         f_extrapolate, residuals, rank, s = scipy.linalg.lstsq(mfull, b, cond=1e-5)
 
-
         error = numpy.sum(numpy.abs(numpy.dot(mfull, f_extrapolate) - b))
         error_exact = 0
         if f_exact is not None:
             error_exact = numpy.sum(numpy.abs(numpy.dot(mfull, f_exact(w_space)) - b))
             pylab.show()
-            #pylab.plot(constraint_space, numpy.dot(mfull, f_exact(w_space)))
+            # pylab.plot(constraint_space, numpy.dot(mfull, f_exact(w_space)))
             InverseFourierTransform.to_function(w_space, f_exact, constraint_space).plot()
             pylab.plot(constraint_space, b)
             pylab.show()
-
 
         """if f_exact is not None:
             pylab.show()
@@ -402,7 +407,6 @@ class FourierExtrapolation(object):
         print(f"Error in inversion: {error}")
         print(f"Error in inversion: exact {error_exact}")
 
-
         f_lower = f_extrapolate[0:len(w_space)]
         f_upper = f_extrapolate[len(w_space):]
 
@@ -412,7 +416,7 @@ class FourierExtrapolation(object):
         else:
             # Take the arithmetic average of upper and lower,
             # note that since the reflection is "Hermitian", we have conj(f_lower(-w)) = f_upper(w)
-            #f_upper = 0.5 * (numpy.conj(numpy.flip(f_lower)) + f_upper)
+            # f_upper = 0.5 * (numpy.conj(numpy.flip(f_lower)) + f_upper)
             f_upper = 0.5 * (numpy.conj(f_lower) + f_upper)
 
         return w_space, f_upper
@@ -438,7 +442,7 @@ class FourierExtrapolation(object):
         target = self._constrain(constraint_space)
         b = target - actual
 
-        #pylab.plot(constraint_space, actual)
+        # pylab.plot(constraint_space, actual)
         pylab.plot(constraint_space, numpy.dot(mfull, fourier).real)
 
         error = numpy.sum(numpy.abs(numpy.dot(mfull, fourier) - b))
@@ -454,7 +458,6 @@ class FourierExtrapolation(object):
         actual = InverseFourierTransform.from_function(constraint_space, self._f)(constraint_space)
         target = self._constrain(constraint_space)
         self._b = target - actual
-
 
     def minimize(self, fourier: numpy.ndarray):
         return numpy.sum(numpy.abs(numpy.dot(self._mfull, fourier) - self._b))

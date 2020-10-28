@@ -134,6 +134,7 @@ class TestRun(object):
         # For the algorithm, use only the real part of R(k)?
         # TODO: also only use the imaginary part?
         self.use_only_real_part = False
+        self.use_only_imag_part = False
 
         # Plot anything? If None, this will be True if any of the plot_* attributes is True
         self.plot = True
@@ -318,7 +319,10 @@ class TestRun(object):
                 pot = potential(x_space)
 
                 self.store_data(zip(x_space, pot), 'pot_it_{}'.format(iteration), 'potential')
-                pylab.plot(x_space, pot, '--')
+                if is_last:
+                    pylab.plot(x_space, pot, '-')
+                else:
+                    pylab.plot(x_space, pot, '--')
 
             if self.plot_phase:
                 k_subspace = self.k_space[0:self.start_end[1]]
@@ -429,11 +433,22 @@ class TestRun(object):
             f1.method = f1.cosine_transform
             f2.method = f2.cosine_transform
 
-        transform = UpdateableFourierTransform(f1, f2)
+        if self.use_only_imag_part:
+            f1.method = f1.sine_transform
+            f2.method = f2.sine_transform
+
+        if self.use_only_imag_part and self.use_only_real_part:
+            raise RuntimeError("Only imaginary and only real part?")
+
+
+        self.real[0] = -1
+        transform = FourierTransform(self.k_space, self.real, self.imag)
+        transform.method = transform.cosine_transform
+        #transform = UpdateableFourierTransform(f1, f2)
         reflcalc = ReflectionCalculation(None, 0, self.thickness + self.offset, 0.1)
 
         # TODO: change the class name
-        # Reconstruct the reflection using the fourier transform at  k =
+        # Reconstruct the reflection using the fourier transform at k =
         # k_interpolation_range (the low k range)
         # rec is used to reconstruct the potential
         # reflcalc is used to calculate the reflection coefficient
@@ -450,8 +465,8 @@ class TestRun(object):
 
         solution = interpolation.interpolate(self.iterations, tolerance=self.tolerance)
 
-        pylab.legend(self.legends)
         if self.show_plot:
+            pylab.legend(self.legends)
             pylab.show()
 
         return solution
@@ -499,7 +514,7 @@ class DataRun(TestRun):
         self.legends = []
 
         self.plot_potential_space = numpy.linspace(0, self.thickness + self.offset,
-                                                   10 * self.precision * (self.thickness + self.offset) + 1)
+                                                   int(10 * self.precision * (self.thickness + self.offset)) + 1)
 
         self.k_space = self._refl_function.get_domain()
         self.k_max = self._refl_function.get_domain().max()
@@ -513,9 +528,9 @@ class DataRun(TestRun):
         self.start_end = (0, numpy.argmax(self.k_space > self.cutoff))
 
         self.k_interpolation_range = self.k_space[self.start_end[0]:self.start_end[1]]
+        self.q_interpolation_range = 2*self.k_interpolation_range
 
-        self.reflcalc = ReflectionCalculation(self.ideal_potential, 0,
-                                              self.thickness + self.offset, 0.1)
+        self.reflcalc = ReflectionCalculation(self.ideal_potential, 0, self.thickness + self.offset, 0.1)
 
         self.reflectivity = self.reflection_function(self.k_space)
 

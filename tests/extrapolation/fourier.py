@@ -4,15 +4,9 @@ from dinv.fourier import (
 )
 from dinv.helper import load_potential, shift_potential
 from dinv.glm import PotentialReconstruction, ReflectionCalculation
-from dinv.function import (
-    Function,
-    FourierTransform,
-    InverseFourierTransform,
-    fourier_matrix,
-    InverseCosineTransform,
-    invfourier_matrix,
-    Lp
-)
+
+from skipi.function import Function
+from skipi.fourier import FourierTransform, InverseFourierTransform, InverseCosineTransform, fourier_matrix
 
 import numpy as np
 import time

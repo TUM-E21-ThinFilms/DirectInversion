@@ -24,12 +24,12 @@ test.noise = 0
 test.iterations = 200
 test.tolerance = 1e-8
 test.offset = 20
-test.thickness = 250
+test.thickness = 180
 test.precision = 1
 test.pot_cutoff = 2
-test.plot_every_nth = 1
+test.plot_every_nth = 10
 test.use_only_real_part = False
-test.q_max = 0.17
+test.q_max = 0.8
 
 #test.start = 'exact'
 #test.store_path = 'store/'

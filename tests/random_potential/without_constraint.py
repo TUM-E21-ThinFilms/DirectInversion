@@ -30,7 +30,7 @@ test.pot_cutoff = 2
 test.use_only_real_part = False
 test.q_max = 0.5
 test.plot_every_nth = 1
-test.store_path = 'store/iteration/'
+#test.store_path = 'store/iteration/'
 test.q_precision = 1
 
 # iteration 6128
