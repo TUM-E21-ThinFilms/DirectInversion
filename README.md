@@ -59,7 +59,7 @@ uses only the imaginary part. This can be achieved simply by
 # Use only real part
 fourier.method = fourier.cosine_transform
 # Use only imaginary part
-fourier.method = fourier.cosine_transform
+fourier.method = fourier.sine_transform
 # Use both
 fourier.method = fourier.fourier_transform
 ```
@@ -77,6 +77,6 @@ reflection = ReflectionCalculation(None, 0, 370)
 constraint = ReflectivityAmplitudeInterpolation._example_constrain
 
 interpolation = ReflectivityAmplitudeInterpolation(fourier, k_range, reconstruction, reflection, constraint)
-reflection = interpolation.interpolate(200)
+reflection = interpolation.interpolate(max_iterations=200)
 ```
 The variable reflection contains the reflection coeffcient only for k in k_range.
